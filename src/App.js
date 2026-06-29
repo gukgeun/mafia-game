@@ -520,7 +520,7 @@ function HostGameScreen({ code, onEnd }) {
   const agreements = mv.agreements || {};
   const failCount = mv.failCount || 0;
   // 제안자 제외 마피아들이 모두 동의했는지
-  const otherMafiaIds = aliveMafiaEntries.filter(([id]) => id !== proposerId).map(([id]) => id);
+  const otherMafiaIds = aliveMafiaEntries.filter(([id]) => String(id) !== String(proposerId)).map(([id]) => id);
   // 마피아가 1명이면 제안자 혼자 타겟 선택만으로 확정, 2명 이상이면 나머지 전원 동의 필요
   const allMafiaAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(id => agreements[id] === true));
   const mafiaFinalTarget = allMafiaAgreed ? proposedTarget : null;
@@ -717,11 +717,11 @@ function HostGameScreen({ code, onEnd }) {
                 {/* 마피아 투표 현황 */}
                 {isNight && p.alive && isMafia(p.role) && (
                   <p style={{ fontSize: 11, color: "#e74c3c", marginTop: 4 }}>
-                    {mv.proposerId === pid ? "🎯 제안자 " : ""}
+                    {String(mv.proposerId) === String(pid) ? "🎯 제안자 " : ""}
                     {mv.proposerId === pid && mv.targetId ? `→ ${playersMap[mv.targetId]?.name}` : ""}
-                    {mv.proposerId !== pid && mv.agreements?.[pid] === true ? "✓ 동의" : ""}
-                    {mv.proposerId !== pid && mv.agreements?.[pid] === false ? "✗ 거부" : ""}
-                    {mv.proposerId !== pid && !mv.agreements?.[pid] && mv.targetId ? "대기중" : ""}
+                    {String(mv.proposerId) !== String(pid) && mv.agreements?.[pid] === true ? "✓ 동의" : ""}
+                    {String(mv.proposerId) !== String(pid) && mv.agreements?.[pid] === false ? "✗ 거부" : ""}
+                    {String(mv.proposerId) !== String(pid) && !mv.agreements?.[pid] && mv.targetId ? "대기중" : ""}
                   </p>
                 )}
                 {/* 특수역할 행동 */}
@@ -864,12 +864,12 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const aliveMafiaIds = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive).map(([id]) => id);
   const mafiaTeam = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== playerId);
   const mv = room.mafiaVoting || {};
-  const proposerId = mv.proposerId || null;
+  const proposerId = mv.proposerId ? String(mv.proposerId) : null;
   const proposedTarget = mv.targetId || null;
   const agreements = mv.agreements || {};
   const failCount = mv.failCount || 0;
-  const amProposer = proposerId === playerId;
-  const otherMafiaIds = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== proposerId).map(([id]) => id);
+  const amProposer = proposerId && proposerId === String(playerId);
+  const otherMafiaIds = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && String(id) !== String(proposerId)).map(([id]) => id);
   // 마피아가 1명이면 혼자 선택만으로 확정
   const allOthersAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(id => agreements[id] === true));
   const reporterAlreadyUsed = !!room.reporterReveal;
@@ -901,7 +901,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 
   // 다른 마피아가 동의
   const agreeMafia = async () => {
-    await update(ref(db, `rooms/${code}/mafiaVoting/agreements`), { [playerId]: true });
+    await update(ref(db, `rooms/${code}/mafiaVoting/agreements`), { [String(playerId)]: true });
   };
 
   // 다른 마피아가 거부 → failCount 증가, 타겟 초기화
@@ -1040,7 +1040,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {mafiaTeam.map(([id, p]) => (
                   <span key={id} style={{ background: "#1a0000", border: "1px solid #3a0000", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e74c3c" }}>
-                    {id === proposerId ? "🎯" : ""}{ROLES_INFO[p.role]?.emoji} {p.name}
+                    {String(id) === String(proposerId) ? "🎯" : ""}{ROLES_INFO[p.role]?.emoji} {p.name}
                     {agreements[id] === true && " ✓"}
                     {agreements[id] === false && " ✗"}
                   </span>
