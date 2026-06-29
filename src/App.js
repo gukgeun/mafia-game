@@ -56,36 +56,117 @@ function checkWin(players) {
   return null;
 }
 
-// ── 공통 컴포넌트 ──
-const Btn = ({ children, onClick, color = "#8B0000", disabled, style = {} }) => (
-  <button type="button" onClick={onClick} disabled={disabled} style={{
-    width: "100%", padding: "15px",
-    background: disabled ? "#1a1a1a" : `linear-gradient(135deg, ${color}dd, ${color})`,
-    color: disabled ? "#444" : "#fff",
-    border: disabled ? "1px solid #222" : "none",
-    borderRadius: 14, fontSize: 15, fontWeight: 700,
-    cursor: disabled ? "not-allowed" : "pointer",
-    fontFamily: "'Noto Sans KR', sans-serif", marginBottom: 10,
-    boxShadow: disabled ? "none" : `0 4px 20px ${color}44`,
-    transition: "all 0.2s", ...style,
-  }}>{children}</button>
-);
+// ── 디자인 토큰 ──
+const T = {
+  bg:       "#08080a",
+  surface:  "#0f0f12",
+  surface2: "#16161b",
+  border:   "#1e1e26",
+  border2:  "#2a2a36",
+  red:      "#c0392b",
+  redGlow:  "#e74c3c",
+  gold:     "#c9a84c",
+  goldDim:  "#7a6530",
+  blue:     "#2980b9",
+  green:    "#27ae60",
+  purple:   "#8e44ad",
+  yellow:   "#d4ac0d",
+  text:     "#e8e8f0",
+  textDim:  "#7a7a8a",
+  textMute: "#3a3a4a",
+};
 
-const Card = ({ children, style = {} }) => (
-  <div style={{ background: "#111", borderRadius: 18, padding: "18px 20px", marginBottom: 14, width: "100%", maxWidth: 460, boxSizing: "border-box", ...style }}>
+// ── 공통 컴포넌트 ──
+const Btn = ({ children, onClick, color, disabled, style = {}, outline = false }) => {
+  const c = color || T.red;
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} style={{
+      width: "100%", padding: "14px 20px",
+      background: disabled ? T.surface2 : outline ? "transparent" : c,
+      color: disabled ? T.textMute : outline ? c : "#fff",
+      border: disabled ? `1px solid ${T.border}` : outline ? `1px solid ${c}` : "none",
+      borderRadius: 8, fontSize: 14, fontWeight: 700, letterSpacing: "0.5px",
+      cursor: disabled ? "not-allowed" : "pointer",
+      fontFamily: "'Noto Sans KR', sans-serif", marginBottom: 8,
+      boxShadow: disabled || outline ? "none" : `0 0 20px ${c}44`,
+      transition: "all 0.2s", ...style,
+    }}>{children}</button>
+  );
+};
+
+const Card = ({ children, style = {}, accent }) => (
+  <div style={{
+    background: T.surface, borderRadius: 12, padding: "16px 18px", marginBottom: 12,
+    width: "100%", maxWidth: 460, boxSizing: "border-box",
+    border: accent ? `1px solid ${accent}` : `1px solid ${T.border}`,
+    borderLeft: accent ? `3px solid ${accent}` : `1px solid ${T.border}`,
+    ...style,
+  }}>
     {children}
   </div>
 );
 
+const Label = ({ children, color }) => (
+  <p style={{ color: color || T.textMute, fontSize: 10, fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase", marginBottom: 8 }}>
+    {children}
+  </p>
+);
+
+const Divider = () => <div style={{ height: 1, background: T.border, margin: "12px 0" }} />;
+
 const PageWrap = ({ children, night = false, wide = false }) => (
   <div style={{
     minHeight: "100vh",
-    background: night ? "linear-gradient(180deg, #05050f 0%, #0a0a1a 100%)" : "linear-gradient(180deg, #0a0000 0%, #0d0d0d 100%)",
-    color: "#fff", fontFamily: "'Noto Sans KR', sans-serif",
+    background: night
+      ? `linear-gradient(160deg, #04040c 0%, #080810 50%, ${T.bg} 100%)`
+      : `linear-gradient(160deg, #0c0404 0%, #0a0808 50%, ${T.bg} 100%)`,
+    color: T.text, fontFamily: "'Noto Sans KR', sans-serif",
     display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "28px 16px 40px", transition: "background 1s ease",
+    padding: "24px 16px 48px", transition: "background 1.2s ease",
   }}>
-    <div style={{ width: "100%", maxWidth: wide ? 700 : 460 }}>{children}</div>
+    <div style={{ width: "100%", maxWidth: wide ? 680 : 440 }}>{children}</div>
+  </div>
+);
+
+// 페이즈 배지
+const PhaseBadge = ({ phase, round }) => {
+  const cfg = phase === "night"
+    ? { label: `밤 ${round}라운드`, color: "#4a6fa5", bg: "#05081a", icon: "🌙" }
+    : phase === "vote"
+    ? { label: `투표 ${round}라운드`, color: T.red, bg: "#110000", icon: "⚖️" }
+    : { label: `낮 ${round}라운드`, color: T.gold, bg: "#100d00", icon: "☀️" };
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: 20, padding: "5px 14px" }}>
+      <span style={{ fontSize: 12 }}>{cfg.icon}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: cfg.color, letterSpacing: 1 }}>{cfg.label}</span>
+    </div>
+  );
+};
+
+// 플레이어 태그
+const PlayerTag = ({ name, isMe, isDead, isHost, extra, onClick, selected, dimmed }) => (
+  <div onClick={onClick} style={{
+    display: "flex", alignItems: "center", gap: 10,
+    padding: "11px 14px", borderRadius: 8, marginBottom: 6,
+    background: selected ? "#1a0800" : isDead ? "transparent" : T.surface2,
+    border: `1px solid ${selected ? T.red : isDead ? T.textMute + "22" : T.border2}`,
+    cursor: onClick ? "pointer" : "default",
+    opacity: dimmed ? 0.4 : 1,
+    transition: "all 0.15s",
+  }}>
+    <div style={{
+      width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
+      background: isDead ? T.textMute + "22" : isMe ? T.red + "33" : T.surface,
+      border: `1px solid ${isDead ? T.textMute + "33" : isMe ? T.red + "66" : T.border}`,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: 14,
+    }}>
+      {isDead ? "💀" : isHost ? "👑" : "👤"}
+    </div>
+    <span style={{ flex: 1, fontSize: 14, fontWeight: isMe ? 700 : 400, color: isDead ? T.textMute : T.text, textDecoration: isDead ? "line-through" : "none" }}>
+      {name}{isMe ? " (나)" : ""}
+    </span>
+    {extra}
   </div>
 );
 
@@ -94,18 +175,50 @@ function TitleScreen({ onHost, onJoin }) {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "radial-gradient(ellipse at 50% 30%, #2a0000 0%, #0d0000 50%, #000 100%)",
+      background: T.bg,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       fontFamily: "'Noto Sans KR', sans-serif", padding: "40px 20px",
+      position: "relative", overflow: "hidden",
     }}>
-      <div style={{ width: 120, height: 120, borderRadius: "50%", background: "radial-gradient(circle, #8B0000 0%, #5a0000 70%, transparent 100%)", marginBottom: 24, opacity: 0.8, boxShadow: "0 0 60px #8B000066" }} />
-      <p style={{ color: "#8B0000", fontSize: 13, letterSpacing: 5, marginBottom: 6, fontWeight: 700 }}>육은영반</p>
-      <h1 style={{ fontSize: 38, fontWeight: 900, color: "#fff", margin: "0 0 6px", textShadow: "0 0 40px #8B0000", letterSpacing: 2, textAlign: "center" }}>마피아 게임</h1>
-      <p style={{ color: "#5a0000", fontSize: 13, letterSpacing: 4, marginBottom: 48 }}>누가 마피아인가?</p>
-      <div style={{ width: "100%", maxWidth: 360 }}>
-        <Btn onClick={onHost} color="#8B0000">🎙️ 사회자로 방 만들기</Btn>
-        <Btn onClick={onJoin} color="#1a3a6b">🚪 플레이어로 참가하기</Btn>
+      {/* 배경 그라데이션 원 */}
+      <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, #3a0000 0%, transparent 70%)", opacity: 0.4, pointerEvents: "none" }} />
+
+      {/* 상단 장식선 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 40 }}>
+        <div style={{ height: 1, width: 40, background: `linear-gradient(to right, transparent, ${T.goldDim})` }} />
+        <span style={{ color: T.goldDim, fontSize: 10, letterSpacing: 4, fontWeight: 700 }}>육은영반</span>
+        <div style={{ height: 1, width: 40, background: `linear-gradient(to left, transparent, ${T.goldDim})` }} />
       </div>
+
+      {/* 메인 타이틀 */}
+      <div style={{ textAlign: "center", marginBottom: 8 }}>
+        <h1 style={{ fontSize: 52, fontWeight: 900, color: T.text, margin: 0, letterSpacing: 4, lineHeight: 1.1, textShadow: `0 0 60px ${T.red}66` }}>
+          마피아
+        </h1>
+        <h1 style={{ fontSize: 52, fontWeight: 900, color: T.red, margin: 0, letterSpacing: 4, lineHeight: 1.1, textShadow: `0 0 40px ${T.red}` }}>
+          게임
+        </h1>
+      </div>
+
+      {/* 서브타이틀 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 56 }}>
+        <div style={{ height: 1, width: 24, background: T.border2 }} />
+        <p style={{ color: T.textMute, fontSize: 11, letterSpacing: 3 }}>누가 마피아인가</p>
+        <div style={{ height: 1, width: 24, background: T.border2 }} />
+      </div>
+
+      {/* 버튼 */}
+      <div style={{ width: "100%", maxWidth: 340 }}>
+        <Btn onClick={onHost} color={T.red} style={{ marginBottom: 12, padding: "16px", fontSize: 15, letterSpacing: 1 }}>
+          🎙️ 사회자로 방 만들기
+        </Btn>
+        <Btn onClick={onJoin} color={T.blue} outline style={{ padding: "16px", fontSize: 15, letterSpacing: 1 }}>
+          🚪 플레이어로 참가하기
+        </Btn>
+      </div>
+
+      {/* 하단 장식 */}
+      <p style={{ position: "absolute", bottom: 24, color: T.textMute, fontSize: 10, letterSpacing: 2 }}>MAFIA GAME</p>
     </div>
   );
 }
@@ -140,50 +253,60 @@ function HostScreen({ onCreated }) {
   };
 
   const roleRows = [
-    { id: "mafia", label: "마피아", emoji: "🔫", color: "#e74c3c" },
-    { id: "mafiaBoss", label: "마피아 보스", emoji: "👑", color: "#e74c3c" },
-    { id: "police", label: "경찰", emoji: "🚔", color: "#3498db" },
-    { id: "doctor", label: "의사", emoji: "⚕️", color: "#2ecc71" },
-    { id: "reporter", label: "기자", emoji: "📰", color: "#f1c40f" },
-    { id: "lawyer", label: "변호사", emoji: "⚖️", color: "#9b59b6" },
+    { id: "mafia", label: "마피아", emoji: "🔫", color: T.red },
+    { id: "mafiaBoss", label: "마피아 보스", emoji: "👑", color: T.red },
+    { id: "police", label: "경찰", emoji: "🚔", color: T.blue },
+    { id: "doctor", label: "의사", emoji: "⚕️", color: T.green },
+    { id: "reporter", label: "기자", emoji: "📰", color: T.yellow },
+    { id: "lawyer", label: "변호사", emoji: "⚖️", color: T.purple },
   ];
 
   return (
     <PageWrap>
-      <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 6 }}>🎙️ 사회자 설정</h2>
-      <p style={{ color: "#555", fontSize: 12, marginBottom: 24 }}>사회자는 게임에 참여하지 않고 진행만 합니다</p>
+      <div style={{ marginBottom: 28 }}>
+        <Label color={T.gold}>사회자 모드</Label>
+        <h2 style={{ fontSize: 24, fontWeight: 900, margin: "4px 0 4px", color: T.text }}>게임 설정</h2>
+        <p style={{ color: T.textMute, fontSize: 12 }}>사회자는 게임에 참여하지 않고 진행만 합니다</p>
+      </div>
 
       <Card>
-        <p style={{ color: "#666", fontSize: 11, marginBottom: 12 }}>플레이어 수 (사회자 제외)</p>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <button type="button" onClick={() => setPlayerCount(p => Math.max(4, p - 1))} style={{ width: 44, height: 44, background: "#1a1a1a", color: "#fff", border: "1px solid #2a2a2a", borderRadius: 12, fontSize: 22, cursor: "pointer" }}>−</button>
-          <span style={{ flex: 1, textAlign: "center", fontSize: 32, fontWeight: 900 }}>{playerCount}명</span>
-          <button type="button" onClick={() => setPlayerCount(p => Math.min(20, p + 1))} style={{ width: 44, height: 44, background: "#1a1a1a", color: "#fff", border: "1px solid #2a2a2a", borderRadius: 12, fontSize: 22, cursor: "pointer" }}>+</button>
+        <Label>플레이어 수</Label>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
+          <button type="button" onClick={() => setPlayerCount(p => Math.max(4, p - 1))} style={{ width: 40, height: 40, background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 20, cursor: "pointer" }}>−</button>
+          <span style={{ flex: 1, textAlign: "center", fontSize: 36, fontWeight: 900, color: T.text }}>{playerCount}</span>
+          <button type="button" onClick={() => setPlayerCount(p => Math.min(20, p + 1))} style={{ width: 40, height: 40, background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 20, cursor: "pointer" }}>+</button>
         </div>
       </Card>
 
       <Card>
-        <p style={{ color: "#666", fontSize: 11, marginBottom: 16 }}>역할 설정</p>
-        {roleRows.map(r => (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
-            <span style={{ color: r.color, fontSize: 16, width: 24 }}>{r.emoji}</span>
-            <span style={{ flex: 1, fontSize: 14, marginLeft: 10 }}>{r.label}</span>
-            <div style={{ display: "flex", alignItems: "center", background: "#1a1a1a", borderRadius: 10, border: "1px solid #2a2a2a" }}>
-              <button type="button" onClick={() => adjust(r.id, -1)} style={{ width: 36, height: 36, background: "none", color: "#fff", border: "none", fontSize: 18, cursor: "pointer" }}>−</button>
-              <span style={{ width: 28, textAlign: "center", fontWeight: 700, fontSize: 15 }}>{roles[r.id]}</span>
-              <button type="button" onClick={() => adjust(r.id, +1)} style={{ width: 36, height: 36, background: "none", color: "#fff", border: "none", fontSize: 18, cursor: "pointer" }}>+</button>
+        <Label>역할 구성</Label>
+        <div style={{ marginTop: 4 }}>
+          {roleRows.map((r, i) => (
+            <div key={r.id}>
+              <div style={{ display: "flex", alignItems: "center", padding: "10px 0" }}>
+                <span style={{ fontSize: 18, width: 28 }}>{r.emoji}</span>
+                <span style={{ flex: 1, fontSize: 14, color: T.text }}>{r.label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 0, background: T.surface2, borderRadius: 8, border: `1px solid ${T.border2}` }}>
+                  <button type="button" onClick={() => adjust(r.id, -1)} style={{ width: 34, height: 34, background: "none", color: T.textDim, border: "none", fontSize: 16, cursor: "pointer" }}>−</button>
+                  <span style={{ width: 26, textAlign: "center", fontWeight: 700, fontSize: 15, color: roles[r.id] > 0 ? r.color : T.textMute }}>{roles[r.id]}</span>
+                  <button type="button" onClick={() => adjust(r.id, +1)} style={{ width: 34, height: 34, background: "none", color: T.textDim, border: "none", fontSize: 16, cursor: "pointer" }}>+</button>
+                </div>
+              </div>
+              {i < roleRows.length - 1 && <Divider />}
             </div>
+          ))}
+          <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ color: T.textMute, fontSize: 12 }}>👤 시민 (자동)</span>
+            <span style={{ fontWeight: 700, color: citizenCount < 0 ? T.red : T.green, fontSize: 14 }}>
+              {citizenCount < 0 ? "⚠ 초과" : `${citizenCount}명`}
+            </span>
           </div>
-        ))}
-        <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: 12, display: "flex", justifyContent: "space-between" }}>
-          <span style={{ color: "#666", fontSize: 13 }}>👤 시민 (자동)</span>
-          <span style={{ fontWeight: 700, color: citizenCount < 0 ? "#e74c3c" : "#2ecc71" }}>
-            {citizenCount < 0 ? "초과!" : `${citizenCount}명`}
-          </span>
         </div>
       </Card>
 
-      <Btn onClick={create} color="#8B0000" disabled={!isValid}>방 생성하기 →</Btn>
+      <Btn onClick={create} color={T.red} disabled={!isValid} style={{ marginTop: 4, padding: "16px", fontSize: 15, letterSpacing: 1 }}>
+        방 생성하기
+      </Btn>
     </PageWrap>
   );
 }
@@ -206,19 +329,30 @@ function JoinScreen({ onJoined }) {
     }, { onlyOnce: true });
   };
 
+  const inputStyle = { width: "100%", padding: "12px 14px", background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 15, fontFamily: "'Noto Sans KR', sans-serif", boxSizing: "border-box", outline: "none" };
+
   return (
     <PageWrap>
-      <h2 style={{ fontSize: 22, fontWeight: 900, marginBottom: 24 }}>🚪 방 참가</h2>
+      <div style={{ marginBottom: 28 }}>
+        <Label color={T.blue}>플레이어</Label>
+        <h2 style={{ fontSize: 24, fontWeight: 900, margin: "4px 0", color: T.text }}>방 참가</h2>
+      </div>
+
       <Card>
-        <p style={{ color: "#666", fontSize: 11, marginBottom: 8 }}>닉네임</p>
-        <input style={{ width: "100%", padding: "13px 16px", background: "#1a1a1a", color: "#fff", border: "1px solid #2a2a2a", borderRadius: 12, fontSize: 15, fontFamily: "'Noto Sans KR', sans-serif", boxSizing: "border-box", outline: "none", marginBottom: 16 }}
-          placeholder="이름을 입력하세요" value={name} onChange={e => setName(e.target.value)} />
-        <p style={{ color: "#666", fontSize: 11, marginBottom: 8 }}>방 코드</p>
-        <input style={{ width: "100%", padding: "13px 16px", background: "#1a1a1a", color: "#fff", border: "1px solid #2a2a2a", borderRadius: 12, fontSize: 24, fontFamily: "'Noto Sans KR', sans-serif", boxSizing: "border-box", textAlign: "center", letterSpacing: 8, outline: "none", textTransform: "uppercase" }}
-          placeholder="ABCD" value={code} onChange={e => setCode(e.target.value.toUpperCase())} maxLength={4} />
-        {error && <p style={{ color: "#e74c3c", fontSize: 12, marginTop: 8 }}>{error}</p>}
+        <Label>닉네임</Label>
+        <input style={inputStyle} placeholder="이름을 입력하세요" value={name} onChange={e => setName(e.target.value)} />
       </Card>
-      <Btn onClick={join} color="#1a3a6b" disabled={!name.trim() || code.length < 4}>입장하기 →</Btn>
+
+      <Card>
+        <Label>방 코드</Label>
+        <input style={{ ...inputStyle, fontSize: 28, textAlign: "center", letterSpacing: 10, textTransform: "uppercase", fontWeight: 900, color: T.gold }}
+          placeholder="ABCD" value={code} onChange={e => setCode(e.target.value.toUpperCase())} maxLength={4} />
+        {error && <p style={{ color: T.red, fontSize: 12, marginTop: 8 }}>⚠ {error}</p>}
+      </Card>
+
+      <Btn onClick={join} color={T.blue} disabled={!name.trim() || code.length < 4} style={{ padding: "16px", fontSize: 15, letterSpacing: 1 }}>
+        입장하기
+      </Btn>
     </PageWrap>
   );
 }
@@ -378,10 +512,17 @@ function HostGameScreen({ code, onEnd }) {
   const votes = room.votes || {};
   const nightActions = room.nightActions || {};
 
-  // 마피아 동의 현황
+  // 마피아 투표 현황
   const aliveMafiaEntries = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive);
-  const allMafiaAgreed = aliveMafiaEntries.length > 0 && aliveMafiaEntries.every(([, p]) => p.mafiaAgreed);
-  const mafiaFinalTarget = aliveMafiaEntries[0]?.[1]?.mafiaVote;
+  const mv = room.mafiaVoting || {};
+  const proposerId = mv.proposerId || null;
+  const proposedTarget = mv.targetId || null;
+  const agreements = mv.agreements || {};
+  const failCount = mv.failCount || 0;
+  // 제안자 제외 마피아들이 모두 동의했는지
+  const otherMafiaIds = aliveMafiaEntries.filter(([id]) => id !== proposerId).map(([id]) => id);
+  const allMafiaAgreed = proposedTarget && otherMafiaIds.length > 0 && otherMafiaIds.every(id => agreements[id] === true);
+  const mafiaFinalTarget = allMafiaAgreed ? proposedTarget : null;
 
   // 투표 집계
   const voteCounts = {};
@@ -395,36 +536,51 @@ function HostGameScreen({ code, onEnd }) {
 
     const updates = {};
     let killed = null;
+    const logEntries = [];
 
     if (mafiaTarget && mafiaTarget !== doctorTarget) {
       updates[`rooms/${code}/players/${mafiaTarget}/alive`] = false;
       updates[`rooms/${code}/players/${mafiaTarget}/deathRound`] = round;
       killed = mafiaTarget;
+      logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 처형했습니다`);
+    } else if (mafiaTarget && mafiaTarget === doctorTarget) {
+      logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 노렸지만`);
+      logEntries.push(`⚕️ 의사가 ${playersMap[doctorTarget]?.name}을(를) 살렸습니다`);
+    } else {
+      logEntries.push(`🌙 마피아가 아무도 처형하지 않았습니다`);
+    }
+
+    if (doctorTarget && mafiaTarget !== doctorTarget) {
+      logEntries.push(`⚕️ 의사가 ${playersMap[doctorTarget]?.name}을(를) 보호했습니다`);
     }
 
     if (policeTarget) {
       const targetRole = playersMap[policeTarget]?.role;
+      const result = targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민";
       updates[`rooms/${code}/policeResult`] = {
         round, targetId: policeTarget,
         targetName: playersMap[policeTarget]?.name,
-        result: targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민",
+        result,
       };
+      logEntries.push(`🚔 경찰이 ${playersMap[policeTarget]?.name}을(를) 조사했습니다`);
     }
 
     if (reporterTarget) {
       const targetRole = playersMap[reporterTarget]?.role;
+      const result = isMafia(targetRole) ? "마피아" : "시민";
       updates[`rooms/${code}/reporterReveal`] = {
         round, targetId: reporterTarget,
         targetName: playersMap[reporterTarget]?.name,
-        result: isMafia(targetRole) ? "마피아" : "시민",
+        result,
       };
+      logEntries.push(`📰 기자가 ${playersMap[reporterTarget]?.name}의 직업을 공개했습니다 (${result})`);
     }
 
-    aliveMafiaEntries.forEach(([id]) => {
-      updates[`rooms/${code}/players/${id}/mafiaVote`] = null;
-      updates[`rooms/${code}/players/${id}/mafiaAgreed`] = null;
-    });
+    // 로그 저장
+    const logKey = `밤${round}`;
+    updates[`rooms/${code}/logs/${logKey}`] = { phase: `밤 ${round}라운드`, entries: logEntries };
 
+    updates[`rooms/${code}/mafiaVoting`] = null;
     updates[`rooms/${code}/lastDeath`] = killed
       ? { round, playerId: killed, playerName: playersMap[killed]?.name, role: playersMap[killed]?.role }
       : { round, playerId: null };
@@ -441,22 +597,31 @@ function HostGameScreen({ code, onEnd }) {
   };
 
   const processVote = async () => {
+    const updates = {};
+    const logEntries = [];
+
     if (room.lawyerBlock) {
-      await update(ref(db, `rooms/${code}`), { phase: "night", votes: null, lawyerBlock: null, lastExecution: { round, playerId: null, blocked: true } });
+      logEntries.push(`⚖️ 변호사가 이의를 제기해 처형이 취소됐습니다`);
+      updates[`rooms/${code}/logs/낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries };
+      await update(ref(db), { ...updates, [`rooms/${code}/phase`]: "night", [`rooms/${code}/votes`]: null, [`rooms/${code}/lawyerBlock`]: null, [`rooms/${code}/lastExecution`]: { round, playerId: null, blocked: true } });
       return;
     }
+
     let maxVotes = 0, executed = null;
     Object.entries(voteCounts).forEach(([id, cnt]) => { if (cnt > maxVotes) { maxVotes = cnt; executed = id; } });
     const topCount = Object.values(voteCounts).filter(c => c === maxVotes).length;
     if (topCount > 1) executed = null;
 
-    const updates = {};
     if (executed) {
       updates[`rooms/${code}/players/${executed}/alive`] = false;
       updates[`rooms/${code}/lastExecution`] = { round, playerId: executed, playerName: playersMap[executed]?.name, role: playersMap[executed]?.role };
+      logEntries.push(`🗳️ 투표 결과 ${playersMap[executed]?.name}이(가) 처형됐습니다 (${revealRole(playersMap[executed]?.role)})`);
     } else {
       updates[`rooms/${code}/lastExecution`] = { round, playerId: null };
+      logEntries.push(`🗳️ 동률로 처형이 무효가 됐습니다`);
     }
+
+    updates[`rooms/${code}/logs/낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries };
     updates[`rooms/${code}/phase`] = "night";
     updates[`rooms/${code}/votes`] = null;
     updates[`rooms/${code}/lawyerBlock`] = null;
@@ -483,19 +648,17 @@ function HostGameScreen({ code, onEnd }) {
   return (
     <PageWrap night={isNight} wide>
       {/* 헤더 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <p style={{ color: "#8B0000", fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 2 }}>🎙️ 사회자 뷰</p>
-          <p style={{ fontSize: 20, fontWeight: 900, color: isNight ? "#3498db" : phase === "vote" ? "#e74c3c" : "#f1c40f" }}>
-            {isNight ? "🌙 밤" : phase === "vote" ? "🗳️ 투표" : "☀️ 낮"} {round}라운드
-          </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <PhaseBadge phase={phase} round={round} />
+          <span style={{ color: T.red, fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>🎙️ 사회자</span>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {phase === "day" && (
             <>
               <button type="button" onClick={() => update(ref(db, `rooms/${code}`), { phase: "vote" })}
-                style={{ padding: "10px 16px", background: "#1a0000", color: "#e74c3c", border: "1px solid #3a0000", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
-                🗳️ 투표
+                style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
+                투표 시작
               </button>
               <button type="button" onClick={() => update(ref(db, `rooms/${code}`), { phase: "night" })}
                 style={{ padding: "10px 16px", background: "#00091a", color: "#3498db", border: "1px solid #1a3a5c", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
@@ -505,14 +668,14 @@ function HostGameScreen({ code, onEnd }) {
           )}
           {isNight && (
             <button type="button" onClick={processNight}
-              style={{ padding: "10px 16px", background: "#001a00", color: "#2ecc71", border: "1px solid #1a5c2a", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
-              ☀️ 밤 종료 {allMafiaAgreed ? "🎯" : "⚠️"}
+              style={{ padding: "8px 16px", background: T.green, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
+              낮으로 {allMafiaAgreed ? "🎯" : failCount >= 3 ? "❌" : "⚠️"}
             </button>
           )}
           {phase === "vote" && (
             <button type="button" onClick={processVote}
-              style={{ padding: "10px 16px", background: "#1a0000", color: "#e74c3c", border: "1px solid #3a0000", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
-              ⚖️ {room.lawyerBlock ? "처형 취소(변호사)" : "처형"}
+              style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
+              {room.lawyerBlock ? "처형 취소" : "처형 확정"}
             </button>
           )}
         </div>
@@ -550,8 +713,11 @@ function HostGameScreen({ code, onEnd }) {
                 {/* 마피아 투표 현황 */}
                 {isNight && p.alive && isMafia(p.role) && (
                   <p style={{ fontSize: 11, color: "#e74c3c", marginTop: 4 }}>
-                    🔫 {p.mafiaVote ? `→ ${playersMap[p.mafiaVote]?.name}` : "미선택"}
-                    {p.mafiaAgreed && " ✓동의"}
+                    {mv.proposerId === pid ? "🎯 제안자 " : ""}
+                    {mv.proposerId === pid && mv.targetId ? `→ ${playersMap[mv.targetId]?.name}` : ""}
+                    {mv.proposerId !== pid && mv.agreements?.[pid] === true ? "✓ 동의" : ""}
+                    {mv.proposerId !== pid && mv.agreements?.[pid] === false ? "✗ 거부" : ""}
+                    {mv.proposerId !== pid && !mv.agreements?.[pid] && mv.targetId ? "대기중" : ""}
                   </p>
                 )}
                 {/* 특수역할 행동 */}
@@ -589,52 +755,68 @@ function HostGameScreen({ code, onEnd }) {
 
       {/* 밤 행동 요약 */}
       {isNight && (
-        <Card style={{ border: "1px solid #1a1a3a", background: "#05050f", maxWidth: "100%" }}>
-          <p style={{ color: "#3498db", fontSize: 12, fontWeight: 700, marginBottom: 12 }}>🌙 밤 행동 요약</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <p style={{ color: "#e74c3c", fontSize: 11, marginBottom: 4 }}>🔫 마피아 타겟</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: allMafiaAgreed ? "#fff" : "#555" }}>
-                {allMafiaAgreed ? (playersMap[mafiaFinalTarget]?.name || "미정") : "동의 대기중..."}
+        <div style={{ background: T.surface, border: `1px solid ${T.blue}33`, borderRadius: 10, padding: "14px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
+          <Label color={T.blue}>밤 행동 요약</Label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 8 }}>
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🔫 마피아</p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: allMafiaAgreed ? T.text : T.textMute }}>
+                {allMafiaAgreed ? (playersMap[mafiaFinalTarget]?.name || "—") : proposedTarget ? playersMap[proposedTarget]?.name + " ?" : "—"}
               </p>
+              {failCount > 0 && <p style={{ color: T.red, fontSize: 10, marginTop: 2 }}>실패 {failCount}/3</p>}
             </div>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <p style={{ color: "#2ecc71", fontSize: 11, marginBottom: 4 }}>⚕️ 의사 보호</p>
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>⚕️ 의사</p>
               <p style={{ fontSize: 14, fontWeight: 700 }}>{nightActions.doctor ? playersMap[nightActions.doctor]?.name : "—"}</p>
             </div>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <p style={{ color: "#3498db", fontSize: 11, marginBottom: 4 }}>🚔 경찰 조사</p>
+            <div style={{ flex: 1, minWidth: 120 }}>
+              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🚔 경찰</p>
               <p style={{ fontSize: 14, fontWeight: 700 }}>{nightActions.police ? playersMap[nightActions.police]?.name : "—"}</p>
             </div>
             {!room.reporterReveal && (
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <p style={{ color: "#f1c40f", fontSize: 11, marginBottom: 4 }}>📰 기자 공개</p>
+              <div style={{ flex: 1, minWidth: 120 }}>
+                <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>📰 기자</p>
                 <p style={{ fontSize: 14, fontWeight: 700 }}>{nightActions.reporter ? playersMap[nightActions.reporter]?.name : "—"}</p>
               </div>
             )}
           </div>
-        </Card>
+        </div>
       )}
 
       {/* 변호사 이의 */}
       {phase === "vote" && room.lawyerBlock && (
-        <Card style={{ border: "1px solid #3a1a5c", background: "#0d0018", maxWidth: "100%" }}>
-          <p style={{ color: "#9b59b6", fontWeight: 700 }}>⚖️ 변호사가 이의를 제기했습니다! 처형이 취소됩니다.</p>
-        </Card>
+        <div style={{ background: T.surface, border: `1px solid ${T.purple}44`, borderLeft: `3px solid ${T.purple}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
+          <p style={{ color: T.purple, fontWeight: 700, fontSize: 13 }}>⚖️ 변호사가 이의를 제기했습니다! 처형이 취소됩니다.</p>
+        </div>
+      )}
+
+      {/* 활동 로그 (사회자) */}
+      {Object.keys(room.logs || {}).length > 0 && (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
+          <Label>활동 로그</Label>
+          {Object.entries(room.logs || {}).sort(([a], [b]) => b.localeCompare(a)).map(([key, log], idx) => (
+            <div key={key} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: idx < Object.keys(room.logs).length - 1 ? `1px solid ${T.border}` : "none" }}>
+              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 6, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
+              {(log.entries || []).map((entry, i) => (
+                <p key={i} style={{ fontSize: 12, color: T.textDim, marginBottom: 3, paddingLeft: 8, borderLeft: `2px solid ${T.border2}` }}>{entry}</p>
+              ))}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* 사망자 */}
       {deadPlayers.length > 0 && (
-        <Card style={{ background: "#0d0d0d", maxWidth: "100%" }}>
-          <p style={{ color: "#444", fontSize: 12, marginBottom: 10 }}>💀 사망자</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
+          <Label>사망자</Label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
             {deadPlayers.map(([id, p]) => (
-              <span key={id} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#3a3a3a" }}>
-                {p.name} ({p.role ? ROLES_INFO[p.role]?.emoji + " " + ROLES_INFO[p.role]?.name : "?"})
+              <span key={id} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, color: T.textMute }}>
+                {p.name} · {p.role ? ROLES_INFO[p.role]?.emoji + " " + ROLES_INFO[p.role]?.name : "?"}
               </span>
             ))}
           </div>
-        </Card>
+        </div>
       )}
     </PageWrap>
   );
@@ -677,8 +859,14 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 
   const aliveMafiaIds = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive).map(([id]) => id);
   const mafiaTeam = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== playerId);
-  const myMafiaVote = playersMap[playerId]?.mafiaVote;
-  const myMafiaAgreed = playersMap[playerId]?.mafiaAgreed;
+  const mv = room.mafiaVoting || {};
+  const proposerId = mv.proposerId || null;
+  const proposedTarget = mv.targetId || null;
+  const agreements = mv.agreements || {};
+  const failCount = mv.failCount || 0;
+  const amProposer = proposerId === playerId;
+  const otherMafiaIds = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== proposerId).map(([id]) => id);
+  const allOthersAgreed = proposedTarget && otherMafiaIds.length > 0 && otherMafiaIds.every(id => agreements[id] === true);
   const reporterAlreadyUsed = !!room.reporterReveal;
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
 
@@ -700,17 +888,26 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
     setNightTarget(targetId); setNightSubmitted(true);
   };
 
+  // 제안자가 타겟 지목
   const selectMafiaTarget = async (targetId) => {
-    await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaVote: targetId, mafiaAgreed: false });
+    if (!amProposer) return;
+    await update(ref(db, `rooms/${code}/mafiaVoting`), { targetId, agreements: {} });
   };
 
-  const agreeMafiaTarget = async () => {
-    if (!myMafiaVote) return;
-    await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaAgreed: true });
+  // 다른 마피아가 동의
+  const agreeMafia = async () => {
+    await update(ref(db, `rooms/${code}/mafiaVoting/agreements`), { [playerId]: true });
   };
 
-  const cancelMafiaAgree = async () => {
-    await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaAgreed: false });
+  // 다른 마피아가 거부 → failCount 증가, 타겟 초기화
+  const refuseMafia = async () => {
+    const newFail = failCount + 1;
+    if (newFail >= 3) {
+      // 3번 실패 → 처형 없음
+      await update(ref(db, `rooms/${code}/mafiaVoting`), { targetId: null, agreements: {}, failCount: newFail, failed: true });
+    } else {
+      await update(ref(db, `rooms/${code}/mafiaVoting`), { targetId: null, agreements: {}, failCount: newFail });
+    }
   };
 
   const useLawyer = async () => {
@@ -725,18 +922,53 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   return (
     <PageWrap night={isNight}>
       {/* 헤더 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <p style={{ color: "#555", fontSize: 11, marginBottom: 2 }}>{isNight ? "🌙 밤" : phase === "vote" ? "🗳️ 투표" : "☀️ 낮"} {round}라운드</p>
-          <p style={{ fontSize: 18, fontWeight: 900, color: isNight ? "#3498db" : phase === "vote" ? "#e74c3c" : "#f1c40f" }}>
-            {isNight ? "밤이 찾아왔습니다" : phase === "vote" ? "처형 투표" : "낮 토론 시간"}
-          </p>
-        </div>
-        <div style={{ background: ri?.bg || "#111", border: `1px solid ${ri?.border || "#333"}`, borderRadius: 12, padding: "8px 14px", textAlign: "center" }}>
-          <p style={{ fontSize: 18 }}>{ri?.emoji}</p>
-          <p style={{ fontSize: 11, color: ri?.color, fontWeight: 700 }}>{ri?.name}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <PhaseBadge phase={phase} round={round} />
+        <div style={{ background: ri?.bg || T.surface, border: `1px solid ${ri?.border || T.border}`, borderRadius: 10, padding: "8px 14px", textAlign: "center", minWidth: 60 }}>
+          <p style={{ fontSize: 20, marginBottom: 2 }}>{ri?.emoji}</p>
+          <p style={{ fontSize: 10, color: ri?.color, fontWeight: 700, letterSpacing: 1 }}>{ri?.name}</p>
         </div>
       </div>
+
+      {/* 직전 로그 크게 표시 */}
+      {(() => {
+        const logs = room.logs || {};
+        const logKeys = Object.keys(logs).sort();
+        const lastKey = logKeys[logKeys.length - 1];
+        const lastLog = lastKey ? logs[lastKey] : null;
+        if (!lastLog) return null;
+        return (
+          <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 10, padding: "16px 18px", marginBottom: 16, width: "100%", maxWidth: 440, boxSizing: "border-box" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div style={{ height: 1, flex: 1, background: T.border }} />
+              <span style={{ color: T.textMute, fontSize: 10, letterSpacing: 3, fontWeight: 700 }}>{lastLog.phase} 기록</span>
+              <div style={{ height: 1, flex: 1, background: T.border }} />
+            </div>
+            {(lastLog.entries || []).map((entry, i) => (
+              <p key={i} style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 8, lineHeight: 1.7, paddingLeft: 8, borderLeft: `2px solid ${T.red}` }}>{entry}</p>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* 전체 로그 */}
+      {Object.keys(room.logs || {}).length > 1 && (
+        <details style={{ marginBottom: 14, width: "100%", maxWidth: 440 }}>
+          <summary style={{ color: T.textMute, fontSize: 11, cursor: "pointer", padding: "10px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, letterSpacing: 2 }}>
+            📜 전체 활동 로그
+          </summary>
+          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "12px 16px" }}>
+            {Object.entries(room.logs || {}).sort(([a], [b]) => b.localeCompare(a)).map(([key, log]) => (
+              <div key={key} style={{ marginBottom: 16 }}>
+                <p style={{ color: T.textMute, fontSize: 10, marginBottom: 8, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
+                {(log.entries || []).map((entry, i) => (
+                  <p key={i} style={{ fontSize: 12, color: T.textDim, marginBottom: 4 }}>{entry}</p>
+                ))}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* 공지들 */}
       {phase === "day" && lastDeath?.round === round - 1 && (
@@ -791,43 +1023,77 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
       {/* 마피아 팀 패널 */}
       {amMafia && isNight && amAlive && (
         <Card style={{ border: "1px solid #5a0000", background: "#0d0000" }}>
-          <p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700, marginBottom: 12 }}>🔫 마피아 팀 (나만 보여요)</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700 }}>🔫 마피아 팀 (나만 보여요)</p>
+            {failCount > 0 && <span style={{ color: "#e74c3c", fontSize: 11, background: "#2a0000", border: "1px solid #5a0000", borderRadius: 20, padding: "2px 10px" }}>실패 {failCount}/3</span>}
+          </div>
+
+          {/* 팀원 현황 */}
           {mafiaTeam.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <p style={{ color: "#666", fontSize: 11, marginBottom: 6 }}>팀원</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {mafiaTeam.map(([id, p]) => (
                   <span key={id} style={{ background: "#1a0000", border: "1px solid #3a0000", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e74c3c" }}>
-                    {ROLES_INFO[p.role]?.emoji} {p.name}
-                    {p.mafiaVote && ` → ${playersMap[p.mafiaVote]?.name}`}
-                    {p.mafiaAgreed && " ✓"}
+                    {id === proposerId ? "🎯" : ""}{ROLES_INFO[p.role]?.emoji} {p.name}
+                    {agreements[id] === true && " ✓"}
+                    {agreements[id] === false && " ✗"}
                   </span>
                 ))}
               </div>
             </div>
           )}
-          <p style={{ color: "#666", fontSize: 11, marginBottom: 8 }}>제거할 대상</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-            {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
-              <div key={id} onClick={() => selectMafiaTarget(id)} style={{
-                padding: "10px 14px", borderRadius: 10, cursor: "pointer",
-                background: myMafiaVote === id ? "#2a0000" : "#1a1a1a",
-                border: `1px solid ${myMafiaVote === id ? "#8B0000" : "#222"}`,
-                display: "flex", alignItems: "center",
-              }}>
-                <span style={{ flex: 1, fontSize: 13 }}>{p.name}</span>
-                {myMafiaVote === id && <span style={{ color: "#e74c3c", fontSize: 11 }}>✓ 내 선택</span>}
-              </div>
-            ))}
-          </div>
-          {myMafiaVote && !myMafiaAgreed && (
-            <Btn onClick={agreeMafiaTarget} color="#8B0000" style={{ marginBottom: 6 }}>✅ {playersMap[myMafiaVote]?.name} 제거에 동의</Btn>
-          )}
-          {myMafiaAgreed && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ flex: 1, padding: "12px", background: "#001a00", border: "1px solid #1a5c2a", borderRadius: 12, textAlign: "center", color: "#2ecc71", fontSize: 13, fontWeight: 700 }}>✅ 동의 완료</div>
-              <button type="button" onClick={cancelMafiaAgree} style={{ padding: "12px 16px", background: "#1a1a1a", border: "1px solid #333", borderRadius: 12, color: "#666", fontSize: 12, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>취소</button>
+
+          {/* 처형 실패 */}
+          {mv.failed && failCount >= 3 && (
+            <div style={{ background: "#1a0000", border: "1px solid #5a0000", borderRadius: 10, padding: "12px", textAlign: "center", marginBottom: 8 }}>
+              <p style={{ color: "#e74c3c", fontWeight: 700 }}>❌ 3번 실패! 오늘 밤 처형 없음</p>
             </div>
+          )}
+
+          {/* 제안자: 타겟 선택 */}
+          {amProposer && !mv.failed && (
+            <>
+              <p style={{ color: "#666", fontSize: 11, marginBottom: 8 }}>
+                🎯 제안자 — 제거할 대상을 선택하세요 {proposedTarget ? `(현재: ${playersMap[proposedTarget]?.name})` : ""}
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
+                  <div key={id} onClick={() => selectMafiaTarget(id)} style={{
+                    padding: "10px 14px", borderRadius: 10, cursor: "pointer",
+                    background: proposedTarget === id ? "#2a0000" : "#1a1a1a",
+                    border: `1px solid ${proposedTarget === id ? "#8B0000" : "#222"}`,
+                    display: "flex", alignItems: "center",
+                  }}>
+                    <span style={{ flex: 1, fontSize: 13 }}>{p.name}</span>
+                    {proposedTarget === id && <span style={{ color: "#e74c3c", fontSize: 11 }}>✓ 선택됨</span>}
+                  </div>
+                ))}
+              </div>
+              {allOthersAgreed && <p style={{ color: "#2ecc71", fontSize: 13, textAlign: "center" }}>🎯 모두 동의! 사회자가 밤을 종료하면 처형됩니다.</p>}
+            </>
+          )}
+
+          {/* 다른 마피아: 동의/거부 */}
+          {!amProposer && !mv.failed && proposedTarget && (
+            <>
+              <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>
+                제안: <strong style={{ color: "#fff" }}>{playersMap[proposedTarget]?.name}</strong> 제거
+              </p>
+              {agreements[playerId] === undefined && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn onClick={agreeMafia} color="#27ae60" style={{ marginBottom: 0 }}>✅ 동의</Btn>
+                  <Btn onClick={refuseMafia} color="#8B0000" style={{ marginBottom: 0 }}>❌ 거부</Btn>
+                </div>
+              )}
+              {agreements[playerId] === true && <p style={{ color: "#2ecc71", fontWeight: 700, textAlign: "center" }}>✅ 동의했습니다</p>}
+              {agreements[playerId] === false && <p style={{ color: "#e74c3c", fontWeight: 700, textAlign: "center" }}>❌ 거부했습니다</p>}
+            </>
+          )}
+
+          {/* 제안 대기 중 */}
+          {!amProposer && !mv.failed && !proposedTarget && (
+            <p style={{ color: "#555", fontSize: 13 }}>제안자가 타겟을 선택하는 중...</p>
           )}
         </Card>
       )}
@@ -903,17 +1169,40 @@ function WinScreen({ winner, myRole, isHost, onRestart }) {
   const isMafiaWin = winner === "mafia";
   const myTeam = myRole ? ROLES_INFO[myRole]?.team : null;
   const iWon = isHost ? false : myTeam === winner;
+  const winColor = isMafiaWin ? T.red : T.green;
+
   return (
-    <div style={{ minHeight: "100vh", background: isMafiaWin ? "radial-gradient(ellipse at top, #2a0000, #000)" : "radial-gradient(ellipse at top, #002a00, #000)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Noto Sans KR', sans-serif", padding: 32, textAlign: "center" }}>
-      <div style={{ fontSize: 80, marginBottom: 16 }}>{isMafiaWin ? "🔫" : "⚖️"}</div>
-      <h1 style={{ fontSize: 40, fontWeight: 900, color: isMafiaWin ? "#e74c3c" : "#2ecc71", marginBottom: 10 }}>
-        {isMafiaWin ? "마피아 승리!" : "시민 승리!"}
+    <div style={{
+      minHeight: "100vh",
+      background: T.bg,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Noto Sans KR', sans-serif", padding: 40, textAlign: "center",
+      position: "relative", overflow: "hidden",
+    }}>
+      {/* 배경 */}
+      <div style={{ position: "absolute", top: "20%", left: "50%", transform: "translateX(-50%)", width: 400, height: 400, borderRadius: "50%", background: `radial-gradient(circle, ${winColor}22 0%, transparent 70%)`, pointerEvents: "none" }} />
+
+      {/* 장식선 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 40 }}>
+        <div style={{ height: 1, width: 50, background: `linear-gradient(to right, transparent, ${winColor}66)` }} />
+        <span style={{ color: winColor, fontSize: 10, letterSpacing: 4, fontWeight: 700 }}>GAME OVER</span>
+        <div style={{ height: 1, width: 50, background: `linear-gradient(to left, transparent, ${winColor}66)` }} />
+      </div>
+
+      <div style={{ fontSize: 64, marginBottom: 24 }}>{isMafiaWin ? "🔫" : "⚖️"}</div>
+
+      <h1 style={{ fontSize: 44, fontWeight: 900, color: winColor, marginBottom: 8, letterSpacing: 2, textShadow: `0 0 40px ${winColor}66` }}>
+        {isMafiaWin ? "마피아 승리" : "시민 승리"}
       </h1>
-      <p style={{ fontSize: 18, color: isHost ? "#888" : iWon ? "#ffd700" : "#666", marginBottom: 48 }}>
-        {isHost ? "🎙️ 게임이 종료됐습니다" : iWon ? "🏆 당신이 이겼어요!" : "😢 아쉽게 졌어요..."}
+
+      <p style={{ fontSize: 16, color: isHost ? T.textMute : iWon ? T.gold : T.textMute, marginBottom: 52, letterSpacing: 1 }}>
+        {isHost ? "게임이 종료됐습니다" : iWon ? "🏆  당신이 이겼습니다" : "아쉽게 졌습니다"}
       </p>
-      <div style={{ width: "100%", maxWidth: 360 }}>
-        <Btn onClick={onRestart} color="#8B0000">🔄 다시 하기</Btn>
+
+      <div style={{ width: "100%", maxWidth: 300 }}>
+        <Btn onClick={onRestart} color={T.red} style={{ padding: "16px", fontSize: 14, letterSpacing: 2 }}>
+          다시 하기
+        </Btn>
       </div>
     </div>
   );
@@ -932,7 +1221,16 @@ export default function App() {
 
   return (
     <>
-      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #08080a; }
+        input::placeholder { color: #3a3a4a; }
+        input { outline: none; }
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      `}</style>
       {screen === "title" && (
         <TitleScreen
           onHost={() => setScreen("host")}
