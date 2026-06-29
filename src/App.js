@@ -521,7 +521,8 @@ function HostGameScreen({ code, onEnd }) {
   const failCount = mv.failCount || 0;
   // 제안자 제외 마피아들이 모두 동의했는지
   const otherMafiaIds = aliveMafiaEntries.filter(([id]) => id !== proposerId).map(([id]) => id);
-  const allMafiaAgreed = proposedTarget && otherMafiaIds.length > 0 && otherMafiaIds.every(id => agreements[id] === true);
+  // 마피아가 1명이면 제안자 혼자 타겟 선택만으로 확정, 2명 이상이면 나머지 전원 동의 필요
+  const allMafiaAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(id => agreements[id] === true));
   const mafiaFinalTarget = allMafiaAgreed ? proposedTarget : null;
 
   // 투표 집계
@@ -660,9 +661,12 @@ function HostGameScreen({ code, onEnd }) {
                 style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
                 투표 시작
               </button>
-              <button type="button" onClick={() => update(ref(db, `rooms/${code}`), { phase: "night" })}
-                style={{ padding: "10px 16px", background: "#00091a", color: "#3498db", border: "1px solid #1a3a5c", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
-                🌙 밤으로
+              <button type="button" onClick={async () => {
+                const mafiaIds = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive).map(([id]) => id);
+                const randProposer = mafiaIds[Math.floor(Math.random() * mafiaIds.length)];
+                await update(ref(db, `rooms/${code}`), { phase: "night", mafiaVoting: { proposerId: randProposer, targetId: null, agreements: {}, failCount: 0, failed: false } });
+              }} style={{ padding: "8px 16px", background: T.blue, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
+                밤으로
               </button>
             </>
           )}
@@ -866,7 +870,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const failCount = mv.failCount || 0;
   const amProposer = proposerId === playerId;
   const otherMafiaIds = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== proposerId).map(([id]) => id);
-  const allOthersAgreed = proposedTarget && otherMafiaIds.length > 0 && otherMafiaIds.every(id => agreements[id] === true);
+  // 마피아가 1명이면 혼자 선택만으로 확정
+  const allOthersAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(id => agreements[id] === true));
   const reporterAlreadyUsed = !!room.reporterReveal;
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
 
@@ -1070,7 +1075,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
                   </div>
                 ))}
               </div>
-              {allOthersAgreed && <p style={{ color: "#2ecc71", fontSize: 13, textAlign: "center" }}>🎯 모두 동의! 사회자가 밤을 종료하면 처형됩니다.</p>}
+              {allOthersAgreed && proposedTarget && <p style={{ color: T.green, fontSize: 13, textAlign: "center" }}>🎯 {otherMafiaIds.length === 0 ? "타겟 선택 완료!" : "모두 동의!"} 사회자가 밤을 종료하면 처형됩니다.</p>}
             </>
           )}
 
