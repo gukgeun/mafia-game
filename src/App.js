@@ -514,6 +514,12 @@ function HostGameScreen({ code, onEnd }) {
 
   // 마피아 투표 현황
   const aliveMafiaEntries = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive);
+  const mafiaVoteCounts = {};
+  aliveMafiaEntries.forEach(([, p]) => {
+    if (p.mafiaVote) mafiaVoteCounts[p.mafiaVote] = (mafiaVoteCounts[p.mafiaVote] || 0) + 1;
+  });
+  const topMafiaTargetArr = Object.entries(mafiaVoteCounts).sort((a, b) => b[1] - a[1]);
+  const topMafiaTarget = topMafiaTargetArr[0]?.[0] || null;
 
   // 투표 집계
   const voteCounts = {};
@@ -865,6 +871,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 
   const aliveMafiaIds = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive).map(([id]) => id);
   const mafiaTeam = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== playerId);
+  const myMafiaVote = playersMap[playerId]?.mafiaVote || null;
   const mv = room.mafiaVoting || {};
   const reporterAlreadyUsed = !!room.reporterReveal;
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
