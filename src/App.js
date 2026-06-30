@@ -435,38 +435,53 @@ function RoleRevealScreen({ code, playerId, onReady }) {
   };
 
   return (
-    <PageWrap>
-      <h2 style={{ fontSize: 20, fontWeight: 900, marginBottom: 6, textAlign: "center" }}>🃏 내 역할 확인</h2>
-      <p style={{ color: "#555", fontSize: 13, marginBottom: 32, textAlign: "center" }}>혼자만 확인하세요!</p>
+    <div style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Noto Sans KR', sans-serif", padding: "32px 20px" }}>
+      <Label color={T.textMute}>역할 배정</Label>
+      <p style={{ color: T.textMute, fontSize: 13, marginBottom: 40, textAlign: "center" }}>혼자만 확인하세요</p>
+
       {!revealed ? (
         <div onClick={() => setRevealed(true)} style={{
-          width: 200, height: 280, margin: "0 auto 32px",
-          background: "linear-gradient(135deg, #1a0000, #0d0d0d)",
-          border: "2px solid #3a0000", borderRadius: 24,
+          width: 180, height: 260, margin: "0 auto 36px",
+          background: T.surface,
+          border: `1px solid ${T.border2}`,
+          borderRadius: 16,
           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", boxShadow: "0 8px 40px #8B000033",
+          cursor: "pointer",
+          boxShadow: `0 0 60px ${T.red}22`,
+          position: "relative", overflow: "hidden",
         }}>
-          <span style={{ fontSize: 56 }}>🃏</span>
-          <p style={{ color: "#5a0000", fontSize: 13, marginTop: 16, letterSpacing: 2 }}>탭해서 확인</p>
+          <div style={{ position: "absolute", inset: 0, background: `repeating-linear-gradient(45deg, ${T.surface2} 0px, ${T.surface2} 1px, transparent 1px, transparent 8px)`, opacity: 0.5 }} />
+          <span style={{ fontSize: 48, position: "relative" }}>🃏</span>
+          <p style={{ color: T.textMute, fontSize: 11, marginTop: 16, letterSpacing: 3, position: "relative" }}>탭해서 확인</p>
         </div>
       ) : ri ? (
         <div style={{
-          width: 200, height: 280, margin: "0 auto 32px",
-          background: `linear-gradient(160deg, ${ri.bg}, #000)`,
-          border: `2px solid ${ri.border}`, borderRadius: 24,
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          padding: 24, boxSizing: "border-box", boxShadow: `0 8px 40px ${ri.color}33`,
+          width: 220, margin: "0 auto 24px",
+          display: "flex", flexDirection: "column", alignItems: "center",
         }}>
-          <span style={{ fontSize: 52 }}>{ri.emoji}</span>
-          <h3 style={{ color: ri.color, fontSize: 22, fontWeight: 900, margin: "14px 0 8px" }}>{ri.name}</h3>
-          <p style={{ color: "#888", fontSize: 11, textAlign: "center", lineHeight: 1.7 }}>{ri.desc}</p>
-          <span style={{ marginTop: 12, fontSize: 11, color: ri.team === "mafia" ? "#e74c3c" : "#2ecc71", background: ri.team === "mafia" ? "#1a000066" : "#00100066", padding: "3px 10px", borderRadius: 20 }}>
-            {ri.team === "mafia" ? "🔴 마피아 팀" : "🔵 시민 팀"}
-          </span>
+          <img src={ri.image} alt={ri.name} style={{
+            width: 220, height: 220, borderRadius: "50%", objectFit: "cover",
+            border: `3px solid ${ri.border}`,
+            boxShadow: `0 0 50px ${ri.color}55`,
+          }} />
+          <h3 style={{ color: ri.color, fontSize: 22, fontWeight: 900, margin: "16px 0 8px", textShadow: `0 0 20px ${ri.color}` }}>{ri.name}</h3>
+          <p style={{ color: T.textDim, fontSize: 12, textAlign: "center", lineHeight: 1.7, maxWidth: 260 }}>{ri.desc}</p>
+          <div style={{ marginTop: 12, padding: "3px 14px", borderRadius: 20, background: ri.team === "mafia" ? "#2a000066" : "#00200066", border: `1px solid ${ri.team === "mafia" ? T.red + "44" : T.green + "44"}` }}>
+            <span style={{ fontSize: 10, color: ri.team === "mafia" ? T.red : T.green, letterSpacing: 2, fontWeight: 700 }}>
+              {ri.team === "mafia" ? "MAFIA" : "CITIZEN"}
+            </span>
+          </div>
         </div>
-      ) : <p style={{ color: "#555" }}>역할 불러오는 중...</p>}
-      {revealed && ri && <Btn onClick={confirm} color="#2ecc71">확인했어요 ✓</Btn>}
-    </PageWrap>
+      ) : <p style={{ color: T.textMute }}>역할 불러오는 중...</p>}
+
+      {revealed && ri && (
+        <div style={{ width: "100%", maxWidth: 300 }}>
+          <Btn onClick={confirm} color={T.green} style={{ padding: "14px", fontSize: 14, letterSpacing: 1 }}>
+            확인했습니다
+          </Btn>
+        </div>
+      )}
+    </div>
   );
 }
 
