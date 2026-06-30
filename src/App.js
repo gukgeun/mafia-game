@@ -520,9 +520,9 @@ function HostGameScreen({ code, onEnd }) {
   const agreements = mv.agreements || {};
   const failCount = mv.failCount || 0;
   // 제안자 제외 마피아들이 모두 동의했는지
-  const otherMafiaIds = aliveMafiaEntries.filter(([id]) => String(id) !== String(proposerId)).map(([id]) => id);
+  const otherMafiaIds = aliveMafiaEntries.filter(([, p]) => p.name !== mv.proposerName).map(([, p]) => p.name);
   // 마피아가 1명이면 제안자 혼자 타겟 선택만으로 확정, 2명 이상이면 나머지 전원 동의 필요
-  const allMafiaAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(id => agreements[id] === true));
+  const allMafiaAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(name => agreements[name] === true));
   const mafiaFinalTarget = allMafiaAgreed ? proposedTarget : null;
 
   // 투표 집계
@@ -1121,7 +1121,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
                   </div>
                 ))}
               </div>
-              {allOthersAgreed && proposedTarget && <p style={{ color: T.green, fontSize: 13, textAlign: "center" }}>🎯 {otherMafiaIds.length === 0 ? "타겟 선택 완료!" : "모두 동의!"} 사회자가 밤을 종료하면 처형됩니다.</p>}
+              {allOthersAgreed && proposedTarget && <p style={{ color: T.green, fontSize: 13, textAlign: "center" }}>🎯 {otherMafiaNames.length === 0 ? "타겟 선택 완료!" : "모두 동의!"} 사회자가 밤을 종료하면 처형됩니다.</p>}
             </>
           )}
 
