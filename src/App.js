@@ -917,9 +917,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   };
 
   const useLawyer = async () => {
-    if (lawyerUsed || room.lawyerUsed) return;
+    if (room.lawyerBlock || room.lawyerUsed) return;
     await update(ref(db, `rooms/${code}`), { lawyerBlock: true, lawyerUsed: true });
-    setLawyerUsed(true);
   };
 
   const lastDeath = room.lastDeath;
