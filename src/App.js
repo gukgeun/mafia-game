@@ -541,8 +541,7 @@ function HostGameScreen({ code, onEnd }) {
       killed = mafiaTarget;
       logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 처형했습니다`);
     } else if (mafiaTarget && mafiaTarget === doctorTarget) {
-      logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 노렸지만`);
-      logEntries.push(`⚕️ 의사가 누군가를 살렸습니다`);
+      logEntries.push(`🔫 마피아가 누군가를 노렸지만 의사가 살렸습니다`);
     } else {
       logEntries.push(`🌙 마피아가 아무도 처형하지 않았습니다`);
     }
