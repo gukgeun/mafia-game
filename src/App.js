@@ -1119,8 +1119,10 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
             const isMe = id === playerId;
             const myVote = voteTarget === id;
             const isNightSelected = nightTarget === id;
-            const canClick = !isMe && amAlive && (
-              (phase === "vote") ||
+            // 의사는 자기 자신도 보호 가능, 나머지는 본인 선택 불가
+            const canSelfTarget = myRole === "doctor";
+            const canClick = (!isMe || canSelfTarget) && amAlive && (
+              (phase === "vote" && !isMe) ||
               (isNight && needsNightAction && !amMafia)
             );
             return (
@@ -1174,11 +1176,17 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 }
 
 // ── 승리 화면 ──
-function WinScreen({ winner, myRole, isHost, onRestart }) {
+function WinScreen({ winner, myRole, isHost, onRestart, code }) {
   const isMafiaWin = winner === "mafia";
   const myTeam = myRole ? ROLES_INFO[myRole]?.team : null;
   const iWon = isHost ? false : myTeam === winner;
   const winColor = isMafiaWin ? T.red : T.green;
+  const [logs, setLogs] = useState({});
+
+  useEffect(() => {
+    if (!code) return;
+    onValue(ref(db, `rooms/${code}/logs`), snap => setLogs(snap.val() || {}), { onlyOnce: true });
+  }, [code]);
 
   return (
     <div style={{
@@ -1207,6 +1215,24 @@ function WinScreen({ winner, myRole, isHost, onRestart }) {
       <p style={{ fontSize: 16, color: isHost ? T.textMute : iWon ? T.gold : T.textMute, marginBottom: 52, letterSpacing: 1 }}>
         {isHost ? "게임이 종료됐습니다" : iWon ? "🏆  당신이 이겼습니다" : "아쉽게 졌습니다"}
       </p>
+
+      {Object.keys(logs).length > 0 && (
+        <details style={{ marginBottom: 24, width: "100%", maxWidth: 420 }}>
+          <summary style={{ color: T.textMute, fontSize: 12, cursor: "pointer", padding: "10px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, letterSpacing: 2, textAlign: "center" }}>
+            📜 전체 게임 로그 보기
+          </summary>
+          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "16px", textAlign: "left", maxHeight: 400, overflowY: "auto" }}>
+            {Object.entries(logs).sort(([a], [b]) => a.localeCompare(b)).map(([key, log]) => (
+              <div key={key} style={{ marginBottom: 16 }}>
+                <p style={{ color: T.textMute, fontSize: 10, marginBottom: 8, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
+                {(log.entries || []).map((entry, i) => (
+                  <p key={i} style={{ fontSize: 13, color: T.textDim, marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${T.border2}` }}>{entry}</p>
+                ))}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       <div style={{ width: "100%", maxWidth: 300 }}>
         <Btn onClick={onRestart} color={T.red} style={{ padding: "16px", fontSize: 14, letterSpacing: 2 }}>
@@ -1269,7 +1295,7 @@ export default function App() {
         <PlayerGameScreen code={roomCode} playerId={playerId} myRole={myRole} onWin={setWinner} />
       )}
       {(screen === "hostgame" || screen === "playergame") && winner && (
-        <WinScreen winner={winner} myRole={myRole} isHost={isHost} onRestart={reset} />
+        <WinScreen winner={winner} myRole={myRole} isHost={isHost} onRestart={reset} code={roomCode} />
       )}
     </>
   );
