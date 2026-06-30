@@ -514,16 +514,6 @@ function HostGameScreen({ code, onEnd }) {
 
   // 마피아 투표 현황
   const aliveMafiaEntries = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive);
-  const mv = room.mafiaVoting || {};
-  const proposerId = mv.proposerId || null;
-  const proposedTarget = mv.targetId || null;
-  const agreements = mv.agreements || {};
-  const failCount = mv.failCount || 0;
-  // 제안자 제외 마피아들이 모두 동의했는지
-  const otherMafiaIds = aliveMafiaEntries.filter(([, p]) => p.name !== mv.proposerName).map(([, p]) => p.name);
-  // 마피아가 1명이면 제안자 혼자 타겟 선택만으로 확정, 2명 이상이면 나머지 전원 동의 필요
-  const allMafiaAgreed = proposedTarget && (otherMafiaIds.length === 0 || otherMafiaIds.every(name => agreements[name] === true));
-  const mafiaFinalTarget = allMafiaAgreed ? proposedTarget : null;
 
   // 투표 집계
   const voteCounts = {};
@@ -533,7 +523,7 @@ function HostGameScreen({ code, onEnd }) {
     const doctorTarget = nightActions.doctor;
     const policeTarget = nightActions.police;
     const reporterTarget = nightActions.reporter;
-    const mafiaTarget = allMafiaAgreed ? mafiaFinalTarget : null;
+    const mafiaTarget = topMafiaTarget || null;
 
     const updates = {};
     let killed = null;
@@ -581,7 +571,10 @@ function HostGameScreen({ code, onEnd }) {
     const logKey = `밤${round}`;
     updates[`rooms/${code}/logs/${logKey}`] = { phase: `밤 ${round}라운드`, entries: logEntries };
 
-    updates[`rooms/${code}/mafiaVoting`] = null;
+    // 마피아 개인 투표 초기화
+    aliveMafiaEntries.forEach(([id]) => {
+      updates[`rooms/${code}/players/${id}/mafiaVote`] = null;
+    });
     updates[`rooms/${code}/lastDeath`] = killed
       ? { round, playerId: killed, playerName: playersMap[killed]?.name, role: playersMap[killed]?.role }
       : { round, playerId: null };
@@ -661,12 +654,8 @@ function HostGameScreen({ code, onEnd }) {
                 style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
                 투표 시작
               </button>
-              <button type="button" onClick={async () => {
-                const mafiaIds = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive).map(([id]) => id);
-                const randProposerId = mafiaIds[Math.floor(Math.random() * mafiaIds.length)];
-                const randProposerName = playersMap[randProposerId]?.name || "";
-                await update(ref(db, `rooms/${code}`), { phase: "night", mafiaVoting: { proposerId: randProposerId, proposerName: randProposerName, targetId: null, agreements: {}, failCount: 0, failed: false } });
-              }} style={{ padding: "8px 16px", background: T.blue, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
+              <button type="button" onClick={() => update(ref(db, `rooms/${code}`), { phase: "night" })}
+                style={{ padding: "8px 16px", background: T.blue, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
                 밤으로
               </button>
             </>
@@ -674,7 +663,7 @@ function HostGameScreen({ code, onEnd }) {
           {isNight && (
             <button type="button" onClick={processNight}
               style={{ padding: "8px 16px", background: T.green, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
-              낮으로 {allMafiaAgreed ? "🎯" : failCount >= 3 ? "❌" : "⚠️"}
+              밤 종료
             </button>
           )}
           {phase === "vote" && (
@@ -718,11 +707,7 @@ function HostGameScreen({ code, onEnd }) {
                 {/* 마피아 투표 현황 */}
                 {isNight && p.alive && isMafia(p.role) && (
                   <p style={{ fontSize: 11, color: "#e74c3c", marginTop: 4 }}>
-                    {mv.proposerName === p.name ? "🎯 제안자 " : ""}
-                    {mv.proposerId === pid && mv.targetId ? `→ ${playersMap[mv.targetId]?.name}` : ""}
-                    {mv.proposerName !== p.name && mv.agreements?.[p.name] === true ? "✓ 동의" : ""}
-                    {mv.proposerName !== p.name && mv.agreements?.[p.name] === false ? "✗ 거부" : ""}
-                    {mv.proposerName !== p.name && !mv.agreements?.[p.name] && mv.targetId ? "대기중" : ""}
+                    🔫 {p.mafiaVote ? `→ ${playersMap[p.mafiaVote]?.name}` : "미선택"}
                   </p>
                 )}
                 {/* 특수역할 행동 */}
@@ -764,11 +749,13 @@ function HostGameScreen({ code, onEnd }) {
           <Label color={T.blue}>밤 행동 요약</Label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 120 }}>
-              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🔫 마피아</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: allMafiaAgreed ? T.text : T.textMute }}>
-                {allMafiaAgreed ? (playersMap[mafiaFinalTarget]?.name || "—") : proposedTarget ? playersMap[proposedTarget]?.name + " ?" : "—"}
+              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🔫 마피아 타겟</p>
+              <p style={{ fontSize: 14, fontWeight: 700 }}>
+                {topMafiaTarget ? playersMap[topMafiaTarget]?.name + " (최다득표)" : "투표 중..."}
               </p>
-              {failCount > 0 && <p style={{ color: T.red, fontSize: 10, marginTop: 2 }}>실패 {failCount}/3</p>}
+              <p style={{ fontSize: 10, color: T.textMute, marginTop: 2 }}>
+                {aliveMafiaEntries.filter(([, p]) => p.mafiaVote).length}/{aliveMafiaEntries.length}명 투표
+              </p>
             </div>
             <div style={{ flex: 1, minWidth: 120 }}>
               <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>⚕️ 의사</p>
@@ -879,55 +866,46 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const aliveMafiaIds = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive).map(([id]) => id);
   const mafiaTeam = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== playerId);
   const mv = room.mafiaVoting || {};
-  const proposerId = mv.proposerId ? String(mv.proposerId) : null;
-  const proposedTarget = mv.targetId || null;
-  const agreements = mv.agreements || {};
-  const failCount = mv.failCount || 0;
-  const myName = playersMap[playerId]?.name || "";
-  const amProposer = !!(mv.proposerName && myName && mv.proposerName === myName);
-  const otherMafiaNames = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && p.name !== mv.proposerName).map(([, p]) => p.name);
-  // 마피아가 1명이면 혼자 선택만으로 확정
-  const allOthersAgreed = proposedTarget && (otherMafiaNames.length === 0 || otherMafiaNames.every(name => agreements[name] === true));
   const reporterAlreadyUsed = !!room.reporterReveal;
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
 
   const submitVote = async (targetId) => {
-    if (voteSubmitted || !amAlive) return;
-    await set(ref(db, `rooms/${code}/votes/${playerId}`), targetId);
-    setVoteTarget(targetId); setVoteSubmitted(true);
+    if (!amAlive) return;
+    // 같은 사람 누르면 취소
+    if (voteTarget === targetId) {
+      await set(ref(db, `rooms/${code}/votes/${playerId}`), null);
+      setVoteTarget(null);
+    } else {
+      await set(ref(db, `rooms/${code}/votes/${playerId}`), targetId);
+      setVoteTarget(targetId);
+    }
   };
 
   const submitNightAction = async (targetId) => {
-    if (nightSubmitted || !amAlive) return;
+    if (!amAlive) return;
     let actionKey = myRole === "doctor" ? "doctor" : myRole === "police" ? "police" : myRole === "reporter" ? "reporter" : null;
     if (!actionKey) return;
-    await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
-    if (myRole === "police") {
-      const targetRole = playersMap[targetId]?.role;
-      setPoliceResult({ name: playersMap[targetId]?.name, result: targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민" });
-    }
-    setNightTarget(targetId); setNightSubmitted(true);
-  };
-
-  // 제안자가 타겟 지목
-  const selectMafiaTarget = async (targetId) => {
-    if (!amProposer) return;
-    await update(ref(db, `rooms/${code}/mafiaVoting`), { targetId, agreements: {} });
-  };
-
-  // 다른 마피아가 동의
-  const agreeMafia = async () => {
-    await update(ref(db, `rooms/${code}/mafiaVoting/agreements`), { [myName]: true });
-  };
-
-  // 다른 마피아가 거부 → failCount 증가, 타겟 초기화
-  const refuseMafia = async () => {
-    const newFail = failCount + 1;
-    if (newFail >= 3) {
-      // 3번 실패 → 처형 없음
-      await update(ref(db, `rooms/${code}/mafiaVoting`), { targetId: null, agreements: {}, failCount: newFail, failed: true });
+    // 같은 사람 누르면 취소
+    if (nightTarget === targetId) {
+      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: null });
+      setNightTarget(null);
+      if (myRole === "police") setPoliceResult(null);
     } else {
-      await update(ref(db, `rooms/${code}/mafiaVoting`), { targetId: null, agreements: {}, failCount: newFail });
+      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
+      if (myRole === "police") {
+        const targetRole = playersMap[targetId]?.role;
+        setPoliceResult({ name: playersMap[targetId]?.name, result: targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민" });
+      }
+      setNightTarget(targetId);
+    }
+  };
+
+  // 마피아 타겟 선택 (같은 사람 누르면 취소)
+  const selectMafiaTarget = async (targetId) => {
+    if (myMafiaVote === targetId) {
+      await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaVote: null });
+    } else {
+      await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaVote: targetId });
     }
   };
 
@@ -1073,78 +1051,41 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 
       {/* 마피아 팀 패널 */}
       {amMafia && isNight && amAlive && (
-        <Card style={{ border: "1px solid #5a0000", background: "#0d0000" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700 }}>🔫 마피아 팀 (나만 보여요)</p>
-            {failCount > 0 && <span style={{ color: "#e74c3c", fontSize: 11, background: "#2a0000", border: "1px solid #5a0000", borderRadius: 20, padding: "2px 10px" }}>실패 {failCount}/3</span>}
-          </div>
+        <Card style={{ border: `1px solid ${T.red}44`, background: T.surface }}>
+          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 12 }}>🔫 마피아 팀 (나만 보여요)</p>
 
-          {/* 팀원 현황 */}
           {mafiaTeam.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <p style={{ color: "#666", fontSize: 11, marginBottom: 6 }}>팀원</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div style={{ marginBottom: 14 }}>
+              <Label>팀원 투표 현황</Label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                 {mafiaTeam.map(([id, p]) => (
-                  <span key={id} style={{ background: "#1a0000", border: "1px solid #3a0000", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#e74c3c" }}>
-                    {p.name === mv.proposerName ? "🎯" : ""}{ROLES_INFO[p.role]?.emoji} {p.name}
-                    {agreements[id] === true && " ✓"}
-                    {agreements[id] === false && " ✗"}
+                  <span key={id} style={{ background: T.surface2, border: `1px solid ${T.red}44`, borderRadius: 20, padding: "4px 12px", fontSize: 12, color: T.red }}>
+                    {ROLES_INFO[p.role]?.emoji} {p.name}
+                    {p.mafiaVote ? ` → ${playersMap[p.mafiaVote]?.name}` : " (미선택)"}
                   </span>
                 ))}
               </div>
             </div>
           )}
 
-          {/* 처형 실패 */}
-          {mv.failed && failCount >= 3 && (
-            <div style={{ background: "#1a0000", border: "1px solid #5a0000", borderRadius: 10, padding: "12px", textAlign: "center", marginBottom: 8 }}>
-              <p style={{ color: "#e74c3c", fontWeight: 700 }}>❌ 3번 실패! 오늘 밤 처형 없음</p>
-            </div>
-          )}
-
-          {/* 제안자: 타겟 선택 */}
-          {amProposer && !mv.failed && (
-            <>
-              <p style={{ color: "#666", fontSize: 11, marginBottom: 8 }}>
-                🎯 제안자 — 제거할 대상을 선택하세요 {proposedTarget ? `(현재: ${playersMap[proposedTarget]?.name})` : ""}
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
-                  <div key={id} onClick={() => selectMafiaTarget(id)} style={{
-                    padding: "10px 14px", borderRadius: 10, cursor: "pointer",
-                    background: proposedTarget === id ? "#2a0000" : "#1a1a1a",
-                    border: `1px solid ${proposedTarget === id ? "#8B0000" : "#222"}`,
-                    display: "flex", alignItems: "center",
-                  }}>
-                    <span style={{ flex: 1, fontSize: 13 }}>{p.name}</span>
-                    {proposedTarget === id && <span style={{ color: "#e74c3c", fontSize: 11 }}>✓ 선택됨</span>}
-                  </div>
-                ))}
+          <Label>제거할 대상 선택</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+            {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
+              <div key={id} onClick={() => selectMafiaTarget(id)} style={{
+                padding: "11px 14px", borderRadius: 8, cursor: "pointer",
+                background: myMafiaVote === id ? `${T.red}22` : T.surface2,
+                border: `1px solid ${myMafiaVote === id ? T.red : T.border2}`,
+                display: "flex", alignItems: "center", transition: "all 0.15s",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
+                {myMafiaVote === id && <span style={{ color: T.red, fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
               </div>
-              {allOthersAgreed && proposedTarget && <p style={{ color: T.green, fontSize: 13, textAlign: "center" }}>🎯 {otherMafiaNames.length === 0 ? "타겟 선택 완료!" : "모두 동의!"} 사회자가 밤을 종료하면 처형됩니다.</p>}
-            </>
-          )}
-
-          {/* 다른 마피아: 동의/거부 */}
-          {!amProposer && !mv.failed && proposedTarget && (
-            <>
-              <p style={{ color: "#aaa", fontSize: 13, marginBottom: 12 }}>
-                제안: <strong style={{ color: "#fff" }}>{playersMap[proposedTarget]?.name}</strong> 제거
-              </p>
-              {agreements[playerId] === undefined && (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn onClick={agreeMafia} color="#27ae60" style={{ marginBottom: 0 }}>✅ 동의</Btn>
-                  <Btn onClick={refuseMafia} color="#8B0000" style={{ marginBottom: 0 }}>❌ 거부</Btn>
-                </div>
-              )}
-              {agreements[playerId] === true && <p style={{ color: "#2ecc71", fontWeight: 700, textAlign: "center" }}>✅ 동의했습니다</p>}
-              {agreements[playerId] === false && <p style={{ color: "#e74c3c", fontWeight: 700, textAlign: "center" }}>❌ 거부했습니다</p>}
-            </>
-          )}
-
-          {/* 제안 대기 중 */}
-          {!amProposer && !mv.failed && !proposedTarget && (
-            <p style={{ color: "#555", fontSize: 13 }}>제안자가 타겟을 선택하는 중...</p>
+            ))}
+          </div>
+          {myMafiaVote && (
+            <p style={{ color: T.green, fontSize: 12, marginTop: 10, textAlign: "center" }}>
+              ✓ {playersMap[myMafiaVote]?.name} 선택 완료
+            </p>
           )}
         </Card>
       )}
@@ -1162,8 +1103,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
             const myVote = voteTarget === id;
             const isNightSelected = nightTarget === id;
             const canClick = !isMe && amAlive && (
-              (phase === "vote" && !voteSubmitted) ||
-              (isNight && !nightSubmitted && needsNightAction && !amMafia)
+              (phase === "vote") ||
+              (isNight && needsNightAction && !amMafia)
             );
             return (
               <div key={id} onClick={() => { if (!canClick) return; if (phase === "vote") submitVote(id); if (isNight) submitNightAction(id); }}
