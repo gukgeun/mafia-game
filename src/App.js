@@ -565,8 +565,8 @@ function HostGameScreen({ code, onEnd }) {
     }
 
     // 로그 저장
-    const logKey = `밤${round}`;
-    updates[`rooms/${code}/logs/${logKey}`] = { phase: `밤 ${round}라운드`, entries: logEntries };
+    const logKey = `r${String(round).padStart(3, "0")}_b_밤${round}`;
+    updates[`rooms/${code}/logs/${logKey}`] = { phase: `밤 ${round}라운드`, entries: logEntries, order: round * 10 + 1 };
 
     // 마피아 개인 투표 초기화
     aliveMafiaEntries.forEach(([id]) => {
@@ -593,7 +593,7 @@ function HostGameScreen({ code, onEnd }) {
 
     if (room.lawyerBlock) {
       logEntries.push(`⚖️ 변호사가 이의를 제기해 처형이 취소됐습니다`);
-      updates[`rooms/${code}/logs/낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries };
+      updates[`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries, order: round * 10 };
       await update(ref(db), { ...updates, [`rooms/${code}/phase`]: "night", [`rooms/${code}/votes`]: null, [`rooms/${code}/lawyerBlock`]: null, [`rooms/${code}/lastExecution`]: { round, playerId: null, blocked: true } });
       return;
     }
@@ -612,7 +612,7 @@ function HostGameScreen({ code, onEnd }) {
       logEntries.push(`🗳️ 동률로 처형이 무효가 됐습니다`);
     }
 
-    updates[`rooms/${code}/logs/낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries };
+    updates[`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries, order: round * 10 };
     updates[`rooms/${code}/phase`] = "night";
     updates[`rooms/${code}/votes`] = null;
     updates[`rooms/${code}/lawyerBlock`] = null;
@@ -783,7 +783,7 @@ function HostGameScreen({ code, onEnd }) {
       {Object.keys(room.logs || {}).length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
           <Label>활동 로그</Label>
-          {Object.entries(room.logs || {}).sort(([a], [b]) => b.localeCompare(a)).map(([key, log], idx) => (
+          {Object.entries(room.logs || {}).sort(([, a], [, b]) => (b.order || 0) - (a.order || 0)).map(([key, log], idx) => (
             <div key={key} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: idx < Object.keys(room.logs).length - 1 ? `1px solid ${T.border}` : "none" }}>
               <p style={{ color: T.textMute, fontSize: 10, marginBottom: 6, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
               {(log.entries || []).map((entry, i) => (
@@ -970,9 +970,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
       {/* 직전 로그 크게 표시 */}
       {(() => {
         const logs = room.logs || {};
-        const logKeys = Object.keys(logs).sort();
-        const lastKey = logKeys[logKeys.length - 1];
-        const lastLog = lastKey ? logs[lastKey] : null;
+        const logEntries2 = Object.entries(logs).sort(([, a], [, b]) => (b.order || 0) - (a.order || 0));
+        const lastLog = logEntries2[0]?.[1] || null;
         if (!lastLog) return null;
         return (
           <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 10, padding: "16px 18px", marginBottom: 16, width: "100%", maxWidth: 440, boxSizing: "border-box" }}>
@@ -995,7 +994,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
             📜 전체 활동 로그
           </summary>
           <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "12px 16px" }}>
-            {Object.entries(room.logs || {}).sort(([a], [b]) => b.localeCompare(a)).map(([key, log]) => (
+            {Object.entries(room.logs || {}).sort(([, a], [, b]) => (b.order || 0) - (a.order || 0)).map(([key, log]) => (
               <div key={key} style={{ marginBottom: 16 }}>
                 <p style={{ color: T.textMute, fontSize: 10, marginBottom: 8, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
                 {(log.entries || []).map((entry, i) => (
@@ -1207,23 +1206,40 @@ function WinScreen({ winner, myRole, isHost, onRestart, code }) {
         {isHost ? "게임이 종료됐습니다" : iWon ? "🏆  당신이 이겼습니다" : "아쉽게 졌습니다"}
       </p>
 
-      {Object.keys(logs).length > 0 && (
-        <details style={{ marginBottom: 24, width: "100%", maxWidth: 420 }}>
-          <summary style={{ color: T.textMute, fontSize: 12, cursor: "pointer", padding: "10px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, letterSpacing: 2, textAlign: "center" }}>
-            📜 전체 게임 로그 보기
-          </summary>
-          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "16px", textAlign: "left", maxHeight: 400, overflowY: "auto" }}>
-            {Object.entries(logs).sort(([a], [b]) => a.localeCompare(b)).map(([key, log]) => (
-              <div key={key} style={{ marginBottom: 16 }}>
-                <p style={{ color: T.textMute, fontSize: 10, marginBottom: 8, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
-                {(log.entries || []).map((entry, i) => (
-                  <p key={i} style={{ fontSize: 13, color: T.textDim, marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${T.border2}` }}>{entry}</p>
+      {Object.keys(logs).length > 0 && (() => {
+        const sortedLogs = Object.entries(logs).sort(([, a], [, b]) => (a.order || 0) - (b.order || 0));
+        const lastLogEntry = sortedLogs[sortedLogs.length - 1];
+        return (
+          <>
+            {/* 마지막 로그 (승패 직전 상황) 크게 표시 */}
+            {lastLogEntry && (
+              <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 10, padding: "16px 18px", marginBottom: 16, width: "100%", maxWidth: 420, boxSizing: "border-box", textAlign: "left" }}>
+                <p style={{ color: T.textMute, fontSize: 10, letterSpacing: 3, fontWeight: 700, marginBottom: 10 }}>{lastLogEntry[1].phase} · 마지막 기록</p>
+                {(lastLogEntry[1].entries || []).map((entry, i) => (
+                  <p key={i} style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 6, lineHeight: 1.7, paddingLeft: 8, borderLeft: `2px solid ${winColor}` }}>{entry}</p>
                 ))}
               </div>
-            ))}
-          </div>
-        </details>
-      )}
+            )}
+
+            {/* 전체 로그 펼쳐보기 */}
+            <details style={{ marginBottom: 24, width: "100%", maxWidth: 420 }}>
+              <summary style={{ color: T.textMute, fontSize: 12, cursor: "pointer", padding: "10px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, letterSpacing: 2, textAlign: "center" }}>
+                📜 전체 게임 로그 보기
+              </summary>
+              <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderTop: "none", borderRadius: "0 0 8px 8px", padding: "16px", textAlign: "left", maxHeight: 400, overflowY: "auto" }}>
+                {sortedLogs.map(([key, log]) => (
+                  <div key={key} style={{ marginBottom: 16 }}>
+                    <p style={{ color: T.textMute, fontSize: 10, marginBottom: 8, letterSpacing: 3, fontWeight: 700 }}>{log.phase}</p>
+                    {(log.entries || []).map((entry, i) => (
+                      <p key={i} style={{ fontSize: 13, color: T.textDim, marginBottom: 4, paddingLeft: 8, borderLeft: `2px solid ${T.border2}` }}>{entry}</p>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </details>
+          </>
+        );
+      })()}
 
       <div style={{ width: "100%", maxWidth: 300 }}>
         <Btn onClick={onRestart} color={T.red} style={{ padding: "16px", fontSize: 14, letterSpacing: 2 }}>
