@@ -836,6 +836,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const [nightTarget, setNightTarget] = useState(null);
   const [nightSubmitted, setNightSubmitted] = useState(false);
   const [lawyerUsed, setLawyerUsed] = useState(false);
+  const [showNightOverlay, setShowNightOverlay] = useState(false);
+  const [showDayOverlay, setShowDayOverlay] = useState(false);
 
   const ri = myRole ? ROLES_INFO[myRole] : null;
 
@@ -845,7 +847,19 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
     if (r?.winner) onWin(r.winner);
   }), [code]);
 
+  const prevPhaseRef = React.useRef(null);
   useEffect(() => {
+    if (!room?.phase) return;
+    const prev = prevPhaseRef.current;
+    if (prev === "day" && room.phase === "night") {
+      setShowNightOverlay(true);
+      setTimeout(() => setShowNightOverlay(false), 3000);
+    }
+    if ((prev === "night" || prev === "vote") && room.phase === "day") {
+      setShowDayOverlay(true);
+      setTimeout(() => setShowDayOverlay(false), 2500);
+    }
+    prevPhaseRef.current = room.phase;
     setVoteTarget(null); setVoteSubmitted(false);
     setPoliceResult(null); setNightTarget(null); setNightSubmitted(false);
   }, [room?.phase, room?.round]);
@@ -928,6 +942,36 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 
   return (
     <PageWrap night={isNight}>
+
+      {/* 밤 전환 오버레이 */}
+      {showNightOverlay && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.96)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          animation: "fadeInOut 3s ease",
+          fontFamily: "'Noto Sans KR', sans-serif",
+        }}>
+          <div style={{ fontSize: 56, marginBottom: 24 }}>🌙</div>
+          <h2 style={{ color: "#3a5a8a", fontSize: 28, fontWeight: 900, marginBottom: 12, letterSpacing: 3 }}>밤이 되었습니다</h2>
+          <p style={{ color: "#4a4a6a", fontSize: 15, letterSpacing: 2 }}>모두 자리에 엎드려주세요</p>
+        </div>
+      )}
+
+      {/* 낮 전환 오버레이 */}
+      {showDayOverlay && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.92)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          fontFamily: "'Noto Sans KR', sans-serif",
+        }}>
+          <div style={{ fontSize: 56, marginBottom: 24 }}>☀️</div>
+          <h2 style={{ color: "#c9a84c", fontSize: 28, fontWeight: 900, marginBottom: 12, letterSpacing: 3 }}>아침이 밝았습니다</h2>
+          <p style={{ color: "#6a5a3a", fontSize: 15, letterSpacing: 2 }}>눈을 떠주세요</p>
+        </div>
+      )}
+
       {/* 헤더 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <PhaseBadge phase={phase} round={round} />
@@ -1237,6 +1281,7 @@ export default function App() {
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes fadeInOut { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
       `}</style>
       {screen === "title" && (
         <TitleScreen
