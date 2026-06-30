@@ -175,40 +175,19 @@ function TitleScreen({ onHost, onJoin }) {
   return (
     <div style={{
       minHeight: "100vh",
-      background: T.bg,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      backgroundImage: "url(/title-bg.png)",
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      backgroundRepeat: "no-repeat",
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end",
       fontFamily: "'Noto Sans KR', sans-serif", padding: "40px 20px",
       position: "relative", overflow: "hidden",
     }}>
-      {/* 배경 그라데이션 원 */}
-      <div style={{ position: "absolute", top: "10%", left: "50%", transform: "translateX(-50%)", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, #3a0000 0%, transparent 70%)", opacity: 0.4, pointerEvents: "none" }} />
-
-      {/* 상단 장식선 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 40 }}>
-        <div style={{ height: 1, width: 40, background: `linear-gradient(to right, transparent, ${T.goldDim})` }} />
-        <span style={{ color: T.goldDim, fontSize: 10, letterSpacing: 4, fontWeight: 700 }}>육은영반</span>
-        <div style={{ height: 1, width: 40, background: `linear-gradient(to left, transparent, ${T.goldDim})` }} />
-      </div>
-
-      {/* 메인 타이틀 */}
-      <div style={{ textAlign: "center", marginBottom: 8 }}>
-        <h1 style={{ fontSize: 52, fontWeight: 900, color: T.text, margin: 0, letterSpacing: 4, lineHeight: 1.1, textShadow: `0 0 60px ${T.red}66` }}>
-          마피아
-        </h1>
-        <h1 style={{ fontSize: 52, fontWeight: 900, color: T.red, margin: 0, letterSpacing: 4, lineHeight: 1.1, textShadow: `0 0 40px ${T.red}` }}>
-          게임
-        </h1>
-      </div>
-
-      {/* 서브타이틀 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 56 }}>
-        <div style={{ height: 1, width: 24, background: T.border2 }} />
-        <p style={{ color: T.textMute, fontSize: 11, letterSpacing: 3 }}>누가 마피아인가</p>
-        <div style={{ height: 1, width: 24, background: T.border2 }} />
-      </div>
+      {/* 하단 그라데이션 오버레이 (버튼 가독성용) */}
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)", pointerEvents: "none" }} />
 
       {/* 버튼 */}
-      <div style={{ width: "100%", maxWidth: 340 }}>
+      <div style={{ width: "100%", maxWidth: 340, position: "relative", zIndex: 1 }}>
         <Btn onClick={onHost} color={T.red} style={{ marginBottom: 12, padding: "16px", fontSize: 15, letterSpacing: 1 }}>
           🎙️ 사회자로 방 만들기
         </Btn>
@@ -216,9 +195,6 @@ function TitleScreen({ onHost, onJoin }) {
           🚪 플레이어로 참가하기
         </Btn>
       </div>
-
-      {/* 하단 장식 */}
-      <p style={{ position: "absolute", bottom: 24, color: T.textMute, fontSize: 10, letterSpacing: 2 }}>MAFIA GAME</p>
     </div>
   );
 }
