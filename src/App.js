@@ -542,13 +542,13 @@ function HostGameScreen({ code, onEnd }) {
       logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 처형했습니다`);
     } else if (mafiaTarget && mafiaTarget === doctorTarget) {
       logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 노렸지만`);
-      logEntries.push(`⚕️ 의사가 ${playersMap[doctorTarget]?.name}을(를) 살렸습니다`);
+      logEntries.push(`⚕️ 의사가 누군가를 살렸습니다`);
     } else {
       logEntries.push(`🌙 마피아가 아무도 처형하지 않았습니다`);
     }
 
     if (doctorTarget && mafiaTarget !== doctorTarget) {
-      logEntries.push(`⚕️ 의사가 ${playersMap[doctorTarget]?.name}을(를) 보호했습니다`);
+      logEntries.push(`⚕️ 의사가 밤사이 누군가를 보호했습니다`);
     }
 
     if (policeTarget) {
@@ -559,12 +559,13 @@ function HostGameScreen({ code, onEnd }) {
         targetName: playersMap[policeTarget]?.name,
         result,
       };
-      logEntries.push(`🚔 경찰이 ${playersMap[policeTarget]?.name}을(를) 조사했습니다`);
+      logEntries.push(`🚔 경찰이 밤사이 누군가를 조사했습니다`);
     }
 
     if (reporterTarget) {
       const targetRole = playersMap[reporterTarget]?.role;
-      const result = isMafia(targetRole) ? "마피아" : "시민";
+      // 정확한 직업명 표시 (마피아 보스도 구분)
+      const result = targetRole === "mafiaBoss" ? "마피아 보스" : isMafia(targetRole) ? "마피아" : ROLES_INFO[targetRole]?.name || "시민";
       updates[`rooms/${code}/reporterReveal`] = {
         round, targetId: reporterTarget,
         targetName: playersMap[reporterTarget]?.name,
@@ -892,17 +893,28 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
     if (!amAlive) return;
     let actionKey = myRole === "doctor" ? "doctor" : myRole === "police" ? "police" : myRole === "reporter" ? "reporter" : null;
     if (!actionKey) return;
-    // 같은 사람 누르면 취소
+    // 경찰은 한번 선택하면 변경 불가
+    if (myRole === "police") {
+      if (nightTarget) return;
+      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
+      const targetRole = playersMap[targetId]?.role;
+      setPoliceResult({ name: playersMap[targetId]?.name, result: targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민" });
+      setNightTarget(targetId);
+      return;
+    }
+    // 기자는 한번 선택하면 변경 불가 (1회 사용)
+    if (myRole === "reporter") {
+      if (nightTarget) return;
+      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
+      setNightTarget(targetId);
+      return;
+    }
+    // 의사는 같은 사람 누르면 취소, 다른 사람 누르면 변경
     if (nightTarget === targetId) {
       await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: null });
       setNightTarget(null);
-      if (myRole === "police") setPoliceResult(null);
     } else {
       await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
-      if (myRole === "police") {
-        const targetRole = playersMap[targetId]?.role;
-        setPoliceResult({ name: playersMap[targetId]?.name, result: targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민" });
-      }
       setNightTarget(targetId);
     }
   };
