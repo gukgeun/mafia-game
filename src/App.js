@@ -134,6 +134,8 @@ const PhaseBadge = ({ phase, round }) => {
     ? { label: `밤 ${round}라운드`, color: "#4a6fa5", bg: "#05081a", icon: "🌙" }
     : phase === "vote"
     ? { label: `투표 ${round}라운드`, color: T.red, bg: "#110000", icon: "⚖️" }
+    : phase === "confirm"
+    ? { label: `처형 확인 ${round}라운드`, color: "#e67e22", bg: "#110800", icon: "🔨" }
     : { label: `낮 ${round}라운드`, color: T.gold, bg: "#100d00", icon: "☀️" };
   return (
     <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: cfg.bg, border: `1px solid ${cfg.color}33`, borderRadius: 20, padding: "5px 14px" }}>
@@ -500,6 +502,10 @@ function HostGameScreen({ code, onEnd }) {
   const phase = room.phase || "day";
   const round = room.round || 1;
   const isNight = phase === "night";
+  const isConfirm = phase === "confirm";
+  const confirmTarget = room.confirmTarget || null;
+  const confirmVotes = room.confirmVotes || {};
+  const myConfirmVote = confirmVotes[playerId] || null;
   const votes = room.votes || {};
   const nightActions = room.nightActions || {};
 
@@ -603,22 +609,59 @@ function HostGameScreen({ code, onEnd }) {
     const topCount = Object.values(voteCounts).filter(c => c === maxVotes).length;
     if (topCount > 1) executed = null;
 
-    if (executed) {
+    if (!executed) {
+      // 동률 - 바로 무효 처리
+      const logE = [`🗳️ 동률로 처형이 무효가 됐습니다`];
+      await update(ref(db), {
+        [`rooms/${code}/lastExecution`]: { round, playerId: null },
+        [`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`]: { phase: `낮 ${round}라운드`, entries: logE, order: round * 10 },
+        [`rooms/${code}/phase`]: "night",
+        [`rooms/${code}/votes`]: null,
+        [`rooms/${code}/lawyerBlock`]: null,
+      });
+      return;
+    }
+
+    // 처형 대상 확정 → 확인 투표 단계로
+    await update(ref(db, `rooms/${code}`), {
+      phase: "confirm",
+      confirmTarget: executed,
+      confirmVotes: {},
+    });
+  };
+
+  // 처형 확인 투표 처리 (방장이 호출)
+  const processConfirm = async () => {
+    const confirmVotes = room.confirmVotes || {};
+    const executed = room.confirmTarget;
+    const yesCount = Object.values(confirmVotes).filter(v => v === "yes").length;
+    const noCount = Object.values(confirmVotes).filter(v => v === "no").length;
+    const aliveCnt = Object.values(playersMap).filter(p => p.alive).length;
+    const majority = Math.floor(aliveCnt / 2) + 1;
+
+    const updates = {};
+    const logEntries = [];
+
+    if (yesCount >= majority) {
+      // 처형 확정
       updates[`rooms/${code}/players/${executed}/alive`] = false;
       updates[`rooms/${code}/lastExecution`] = { round, playerId: executed, playerName: playersMap[executed]?.name, role: playersMap[executed]?.role };
-      logEntries.push(`🗳️ 투표 결과 ${playersMap[executed]?.name}이(가) 처형됐습니다 (${revealRole(playersMap[executed]?.role)})`);
+      logEntries.push(`🗳️ 찬성 ${yesCount}표로 ${playersMap[executed]?.name}이(가) 처형됐습니다 (${revealRole(playersMap[executed]?.role)})`);
     } else {
+      // 처형 취소
       updates[`rooms/${code}/lastExecution`] = { round, playerId: null };
-      logEntries.push(`🗳️ 동률로 처형이 무효가 됐습니다`);
+      logEntries.push(`🗳️ 반대 ${noCount}표로 ${playersMap[executed]?.name}의 처형이 취소됐습니다`);
     }
 
     updates[`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries, order: round * 10 };
     updates[`rooms/${code}/phase`] = "night";
     updates[`rooms/${code}/votes`] = null;
+    updates[`rooms/${code}/confirmVotes`] = null;
+    updates[`rooms/${code}/confirmTarget`] = null;
     updates[`rooms/${code}/lawyerBlock`] = null;
 
     const updatedPlayers = { ...playersMap };
-    if (executed) updatedPlayers[executed] = { ...updatedPlayers[executed], alive: false };
+    if (yesCount >= majority && executed) updatedPlayers[executed] = { ...updatedPlayers[executed], alive: false };
     const win = checkWin(updatedPlayers);
     if (win) { updates[`rooms/${code}/winner`] = win; onEnd(win); }
 
@@ -666,7 +709,13 @@ function HostGameScreen({ code, onEnd }) {
           {phase === "vote" && (
             <button type="button" onClick={processVote}
               style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
-              {room.lawyerBlock ? "처형 취소" : "처형 확정"}
+              {room.lawyerBlock ? "처형 취소" : "투표 종료"}
+            </button>
+          )}
+          {phase === "confirm" && (
+            <button type="button" onClick={processConfirm}
+              style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
+              처형 확정
             </button>
           )}
         </div>
@@ -772,6 +821,21 @@ function HostGameScreen({ code, onEnd }) {
         </div>
       )}
 
+      {/* 처형 확인 투표 현황 (사회자용) */}
+      {phase === "confirm" && confirmTarget && (
+        <div style={{ background: T.surface, border: `1px solid ${T.red}44`, borderLeft: `3px solid ${T.red}`, borderRadius: 10, padding: "14px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
+          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 10 }}>🔨 처형 확인 투표 중</p>
+          <p style={{ color: T.text, fontSize: 15, marginBottom: 10 }}>
+            대상: <strong style={{ color: T.red }}>{playersMap[confirmTarget]?.name}</strong>
+          </p>
+          <div style={{ display: "flex", gap: 20 }}>
+            <p style={{ color: T.green, fontSize: 14 }}>✅ 찬성 {Object.values(room.confirmVotes || {}).filter(v => v === "yes").length}표</p>
+            <p style={{ color: T.red, fontSize: 14 }}>❌ 반대 {Object.values(room.confirmVotes || {}).filter(v => v === "no").length}표</p>
+            <p style={{ color: T.textMute, fontSize: 14 }}>미투표 {Object.values(playersMap).filter(p => p.alive).length - Object.keys(room.confirmVotes || {}).length}명</p>
+          </div>
+        </div>
+      )}
+
       {/* 변호사 이의 */}
       {phase === "vote" && room.lawyerBlock && (
         <div style={{ background: T.surface, border: `1px solid ${T.purple}44`, borderLeft: `3px solid ${T.purple}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
@@ -857,6 +921,11 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const phase = room.phase || "day";
   const round = room.round || 1;
   const isNight = phase === "night";
+  const confirmTarget = room.confirmTarget || null;
+  const isConfirm = phase === "confirm";
+  const confirmTarget = room.confirmTarget || null;
+  const confirmVotes = room.confirmVotes || {};
+  const myConfirmVote = confirmVotes[playerId] || null;
   const amAlive = playersMap[playerId]?.alive;
   const amMafia = isMafia(myRole);
 
@@ -866,6 +935,11 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const mv = room.mafiaVoting || {};
   const reporterAlreadyUsed = !!room.reporterReveal;
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
+
+  const submitConfirmVote = async (v) => {
+    if (!amAlive || myConfirmVote) return;
+    await update(ref(db, `rooms/${code}/confirmVotes`), { [playerId]: v });
+  };
 
   const submitVote = async (targetId) => {
     if (!amAlive) return;
@@ -1045,6 +1119,52 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
           <p style={{ fontSize: 15 }}><strong>{policeResult.name}</strong>님은{" "}
             <span style={{ color: policeResult.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{policeResult.result}</span>입니다!</p>
         </Card>
+      )}
+
+      {/* 처형 확인 투표 팝업 */}
+      {isConfirm && confirmTarget && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9998,
+          background: "rgba(0,0,0,0.85)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20, fontFamily: "'Noto Sans KR', sans-serif",
+        }}>
+          <div style={{ background: T.surface, border: `1px solid ${T.red}66`, borderRadius: 16, padding: "28px 24px", maxWidth: 340, width: "100%", textAlign: "center" }}>
+            <p style={{ fontSize: 32, marginBottom: 12 }}>🔨</p>
+            <p style={{ color: T.textMute, fontSize: 11, letterSpacing: 2, marginBottom: 8 }}>처형 확인 투표</p>
+            <h3 style={{ color: T.text, fontSize: 20, fontWeight: 900, marginBottom: 6 }}>
+              <span style={{ color: T.red }}>{playersMap[confirmTarget]?.name}</span>을(를)<br />처형하시겠습니까?
+            </h3>
+
+            {/* 투표 현황 */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 20, margin: "16px 0" }}>
+              <div>
+                <p style={{ color: T.green, fontSize: 22, fontWeight: 900 }}>{Object.values(confirmVotes).filter(v => v === "yes").length}</p>
+                <p style={{ color: T.textMute, fontSize: 11 }}>찬성</p>
+              </div>
+              <div style={{ width: 1, background: T.border }} />
+              <div>
+                <p style={{ color: T.red, fontSize: 22, fontWeight: 900 }}>{Object.values(confirmVotes).filter(v => v === "no").length}</p>
+                <p style={{ color: T.textMute, fontSize: 11 }}>반대</p>
+              </div>
+            </div>
+
+            {!amAlive && <p style={{ color: T.textMute, fontSize: 13 }}>💀 사망 상태라 투표할 수 없습니다</p>}
+
+            {amAlive && !myConfirmVote && (
+              <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                <Btn onClick={() => submitConfirmVote("yes")} color={T.green} style={{ marginBottom: 0 }}>✅ 찬성</Btn>
+                <Btn onClick={() => submitConfirmVote("no")} color={T.red} style={{ marginBottom: 0 }}>❌ 반대</Btn>
+              </div>
+            )}
+            {amAlive && myConfirmVote && (
+              <p style={{ color: myConfirmVote === "yes" ? T.green : T.red, fontWeight: 700, fontSize: 15, marginTop: 8 }}>
+                {myConfirmVote === "yes" ? "✅ 찬성 투표 완료" : "❌ 반대 투표 완료"}
+              </p>
+            )}
+            <p style={{ color: T.textMute, fontSize: 11, marginTop: 12 }}>사회자가 결과를 확정하면 처리됩니다</p>
+          </div>
+        </div>
       )}
 
       {myRole === "lawyer" && phase === "vote" && amAlive && !room.lawyerUsed && (
