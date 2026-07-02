@@ -921,6 +921,10 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const phase = room.phase || "day";
   const round = room.round || 1;
   const isNight = phase === "night";
+  const isConfirm = phase === "confirm";
+  const confirmTarget = room.confirmTarget || null;
+  const confirmVotes = room.confirmVotes || {};
+  const myConfirmVote = confirmVotes[playerId] || null;
   const amAlive = playersMap[playerId]?.alive;
   const amMafia = isMafia(myRole);
 
