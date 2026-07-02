@@ -505,7 +505,6 @@ function HostGameScreen({ code, onEnd }) {
   const isConfirm = phase === "confirm";
   const confirmTarget = room.confirmTarget || null;
   const confirmVotes = room.confirmVotes || {};
-  const myConfirmVote = confirmVotes[playerId] || null;
   const votes = room.votes || {};
   const nightActions = room.nightActions || {};
 
