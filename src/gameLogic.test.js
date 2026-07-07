@@ -1,4 +1,4 @@
-import { checkWin, resolveNight, resolveConfirm } from "./gameLogic";
+import { checkWin, resolveNight, resolveConfirm, recommendedRoles } from "./gameLogic";
 
 function basePlayers() {
   return {
@@ -183,5 +183,48 @@ describe("checkWin - 광대 제외 처리", () => {
       c1: { role: "citizen", alive: true },
     };
     expect(checkWin(players)).toBe("citizen");
+  });
+});
+
+describe("recommendedRoles - 인원수별 자동 밸런스", () => {
+  const specialTotal = (roles) => Object.values(roles).reduce((a, b) => a + b, 0);
+  const mafiaTeamTotal = (roles) => roles.mafia + roles.mafiaBoss + roles.framer;
+
+  test("4명(최소 인원)이어도 특수 역할 합이 인원수를 넘지 않아야 한다", () => {
+    const roles = recommendedRoles(4);
+    expect(specialTotal(roles)).toBeLessThanOrEqual(4);
+    expect(mafiaTeamTotal(roles)).toBeGreaterThanOrEqual(1);
+  });
+
+  test("8명 기본값은 기존 수동 설정(마피아2/경찰1/의사1)과 동일해야 한다", () => {
+    const roles = recommendedRoles(8);
+    expect(roles.mafia).toBe(2);
+    expect(roles.mafiaBoss).toBe(0);
+    expect(roles.police).toBe(1);
+    expect(roles.doctor).toBe(1);
+  });
+
+  test("32명(최대 인원)이어도 특수 역할 합이 인원수를 넘지 않고, 시민이 최소 1명 이상 남아야 한다", () => {
+    const roles = recommendedRoles(32);
+    const total = specialTotal(roles);
+    expect(total).toBeLessThanOrEqual(32);
+    expect(32 - total).toBeGreaterThan(0);
+  });
+
+  test("마피아팀 비율은 인원수 전체의 약 20~30% 범위를 유지해야 한다", () => {
+    [4, 8, 12, 16, 20, 24, 28, 32].forEach((n) => {
+      const roles = recommendedRoles(n);
+      const ratio = mafiaTeamTotal(roles) / n;
+      expect(ratio).toBeGreaterThanOrEqual(0.2);
+      expect(ratio).toBeLessThanOrEqual(0.35);
+    });
+  });
+
+  test("인원수가 늘어나도 시민 파워롤이 마피아팀보다 과도하게 많아지지 않아야 한다", () => {
+    [8, 16, 24, 32].forEach((n) => {
+      const roles = recommendedRoles(n);
+      const citizenPowerTotal = roles.police + roles.doctor + roles.reporter + roles.lawyer + roles.terrorist + roles.priest;
+      expect(citizenPowerTotal).toBeLessThanOrEqual(mafiaTeamTotal(roles) + n * 0.1 + 4);
+    });
   });
 });

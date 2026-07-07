@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, update } from "firebase/database";
-import { ROLES_INFO, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm } from "./gameLogic";
+import { ROLES_INFO, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm, recommendedRoles } from "./gameLogic";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvV_N8Ndp5jZFG56XNlxpypOktRBIZpOc",
@@ -166,7 +166,12 @@ function TitleScreen({ onHost, onJoin }) {
 // ── 방 만들기 (사회자) ──
 function HostScreen({ onCreated }) {
   const [playerCount, setPlayerCount] = useState(8);
-  const [roles, setRoles] = useState({ mafia: 2, mafiaBoss: 0, police: 1, doctor: 1, reporter: 0, lawyer: 0, terrorist: 0, priest: 0, jester: 0, framer: 0 });
+  const [roles, setRoles] = useState(recommendedRoles(8));
+
+  // 인원수를 바꾸면 그 인원수에 맞는 추천 구성으로 자동 재조정한다.
+  useEffect(() => {
+    setRoles(recommendedRoles(playerCount));
+  }, [playerCount]);
 
   const specialTotal = Object.values(roles).reduce((a, b) => a + b, 0);
   const citizenCount = playerCount - specialTotal;
@@ -220,6 +225,7 @@ function HostScreen({ onCreated }) {
           <span style={{ flex: 1, textAlign: "center", fontSize: 36, fontWeight: 900, color: T.text }}>{playerCount}</span>
           <button type="button" onClick={() => setPlayerCount(p => Math.min(32, p + 1))} style={{ width: 40, height: 40, background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 20, cursor: "pointer" }}>+</button>
         </div>
+        <p style={{ color: T.textMute, fontSize: 11, marginTop: 8 }}>인원수를 바꾸면 아래 역할 구성이 추천 밸런스로 자동 조정돼요</p>
       </Card>
 
       <Card>

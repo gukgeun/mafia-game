@@ -21,6 +21,25 @@ export function generateCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
+// 인원수에 맞춰 밸런스가 맞는 역할 구성을 추천한다.
+// 원칙: 마피아팀은 전체 인원의 약 25%를 유지하고, 시민팀 파워롤은 마피아 대비 과하게 쌓이지 않도록 천천히 늘린다.
+export function recommendedRoles(playerCount) {
+  const mafiaTeamSize = Math.max(1, Math.round(playerCount * 0.25));
+  const mafiaBoss = mafiaTeamSize >= 4 ? 1 : 0;
+  const framer = mafiaTeamSize >= 8 ? 2 : mafiaTeamSize >= 6 ? 1 : 0;
+  const mafia = Math.max(0, mafiaTeamSize - mafiaBoss - framer);
+
+  const police = playerCount >= 20 ? 2 : 1;
+  const doctor = playerCount >= 20 ? 2 : 1;
+  const reporter = playerCount >= 12 ? 1 : 0;
+  const lawyer = playerCount >= 14 ? 1 : 0;
+  const terrorist = playerCount >= 10 ? 1 : 0;
+  const priest = playerCount >= 16 ? 1 : 0;
+  const jester = playerCount >= 10 ? 1 : 0;
+
+  return { mafia, mafiaBoss, police, doctor, reporter, lawyer, terrorist, priest, jester, framer };
+}
+
 export function shuffleRoles(playerCount, roleConfig, citizenCount) {
   const list = [];
   Object.entries(roleConfig).forEach(([id, count]) => {
