@@ -12,9 +12,10 @@ export const ROLES_INFO = {
   priest:    { name: "성직자",      emoji: "✝️", color: "#ecf0f1", bg: "#0a0a0a", border: "#4a4a4a", team: "citizen", desc: "단 한 번, 죽은 사람을 부활시킬 수 있습니다.", image: "/role-priest.png" },
   jester:    { name: "광대",        emoji: "🤡", color: "#e84393", bg: "#1a0014", border: "#5c004a", team: "jester",  desc: "처형당하면 혼자 승리합니다! 의심받도록 행동하세요.", image: "/role-jester.png" },
   framer:    { name: "모함가",      emoji: "🎭", color: "#c0392b", bg: "#1a0000", border: "#5a0000", team: "mafia",   desc: "매 밤 한 명에게 누명을 씌워 경찰 조사를 조작하세요.", image: "/role-framer.png" },
+  bomber:    { name: "폭탄마",      emoji: "💣", color: "#e74c3c", bg: "#1a0000", border: "#5a0000", team: "mafia",   desc: "처형당하면 찬성표를 던진 사람 중 한 명이 함께 사망합니다!", image: null },
 };
 
-export const isMafia = (role) => role === "mafia" || role === "mafiaBoss" || role === "framer";
+export const isMafia = (role) => role === "mafia" || role === "mafiaBoss" || role === "framer" || role === "bomber";
 export const revealRole = (role) => isMafia(role) ? `${ROLES_INFO[role].emoji} ${ROLES_INFO[role].name}` : "👤 시민";
 
 export function generateCode() {
@@ -27,7 +28,8 @@ export function recommendedRoles(playerCount) {
   const mafiaTeamSize = Math.max(1, Math.round(playerCount * 0.25));
   const mafiaBoss = mafiaTeamSize >= 4 ? 1 : 0;
   const framer = mafiaTeamSize >= 8 ? 2 : mafiaTeamSize >= 6 ? 1 : 0;
-  const mafia = Math.max(0, mafiaTeamSize - mafiaBoss - framer);
+  const bomber = mafiaTeamSize >= 5 ? 1 : 0;
+  const mafia = Math.max(0, mafiaTeamSize - mafiaBoss - framer - bomber);
 
   const police = playerCount >= 20 ? 2 : 1;
   const doctor = playerCount >= 20 ? 2 : 1;
@@ -37,7 +39,7 @@ export function recommendedRoles(playerCount) {
   const priest = playerCount >= 16 ? 1 : 0;
   const jester = playerCount >= 10 ? 1 : 0;
 
-  return { mafia, mafiaBoss, police, doctor, reporter, lawyer, terrorist, priest, jester, framer };
+  return { mafia, mafiaBoss, police, doctor, reporter, lawyer, terrorist, priest, jester, framer, bomber };
 }
 
 export function shuffleRoles(playerCount, roleConfig, citizenCount) {
@@ -142,7 +144,8 @@ export function resolveNight({ playersMap, nightActions, round, mafiaTarget }) {
 }
 
 // 낮 처형 확인 투표 처리. updates 키는 room 루트 기준 상대 경로.
-export function resolveConfirm({ playersMap, executed, yesCount, noCount, majority, round }) {
+// pickRandom은 테스트에서 결정론적으로 주입할 수 있도록 분리했다 (기본값: Math.random 기반).
+export function resolveConfirm({ playersMap, executed, yesCount, noCount, majority, round, confirmVotes = {}, pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)] }) {
   const updates = {};
   const logEntries = [];
   let bombTarget = null;
@@ -159,6 +162,18 @@ export function resolveConfirm({ playersMap, executed, yesCount, noCount, majori
         bombTarget = target;
         updates[`players/${target}/alive`] = false;
         logEntries.push(`🧨 테러리스트 ${playersMap[executed]?.name}가 처형되며 함께 ${playersMap[target]?.name}을(를) 폭사시켰습니다`);
+      }
+    }
+
+    if (playersMap[executed]?.role === "bomber") {
+      const yesVoters = Object.entries(confirmVotes)
+        .filter(([id, v]) => v === "yes" && id !== executed && playersMap[id]?.alive)
+        .map(([id]) => id);
+      if (yesVoters.length > 0) {
+        const target = pickRandom(yesVoters);
+        bombTarget = target;
+        updates[`players/${target}/alive`] = false;
+        logEntries.push(`💣 폭탄마 ${playersMap[executed]?.name}가 처형되며 찬성표를 던진 ${playersMap[target]?.name}을(를) 함께 폭사시켰습니다`);
       }
     }
 

@@ -208,6 +208,7 @@ function HostScreen({ onCreated }) {
     { id: "priest", label: "성직자", emoji: "✝️", color: "#ecf0f1" },
     { id: "jester", label: "광대", emoji: "🤡", color: "#e84393" },
     { id: "framer", label: "모함가", emoji: "🎭", color: T.red },
+    { id: "bomber", label: "폭탄마", emoji: "💣", color: T.red },
   ];
 
   return (
@@ -581,7 +582,7 @@ function HostGameScreen({ code, onEnd }) {
     const aliveCnt = Object.values(playersMap).filter(p => p.alive).length;
     const majority = Math.floor(aliveCnt / 2) + 1;
 
-    const { updates: resolved, logEntries, bombTarget, jesterWin } = resolveConfirm({ playersMap, executed, yesCount, noCount, majority, round });
+    const { updates: resolved, logEntries, bombTarget, jesterWin } = resolveConfirm({ playersMap, executed, yesCount, noCount, majority, round, confirmVotes });
 
     const updates = {};
     Object.entries(resolved).forEach(([k, v]) => { updates[`rooms/${code}/${k}`] = v; });
@@ -1039,6 +1040,15 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <PhaseBadge phase={phase} round={round} />
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.surface, border: `1px solid ${ri?.border || T.border}`, borderRadius: 10, padding: "6px 12px 6px 6px" }}>
+          {ri && (
+            <span style={{
+              fontSize: 10, fontWeight: 900, letterSpacing: 1,
+              color: ri.team === "mafia" ? T.red : ri.team === "jester" ? "#e84393" : T.green,
+              paddingRight: 8, borderRight: `1px solid ${T.border}`,
+            }}>
+              {ri.team === "mafia" ? "마피아팀" : ri.team === "jester" ? "광대(솔로)" : "시민팀"}
+            </span>
+          )}
           {ri?.image && <img src={ri.image} alt={ri.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: `1px solid ${ri.border}` }} />}
           <p style={{ fontSize: 11, color: ri?.color, fontWeight: 700, letterSpacing: 1 }}>{ri?.name}</p>
         </div>

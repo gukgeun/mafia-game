@@ -165,6 +165,54 @@ describe("resolveConfirm - 테러리스트 / 광대", () => {
   });
 });
 
+describe("resolveConfirm - 폭탄마", () => {
+  test("폭탄마가 처형되면 찬성표를 던진 사람 중 한 명이 함께 사망해야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.b1 = { name: "폭탄마1", role: "bomber", alive: true };
+    const confirmVotes = { c1: "yes", c2: "no", m1: "yes", b1: "yes" }; // b1 자기 자신도 찬성했다고 가정
+    const { updates, bombTarget, logEntries } = resolveConfirm({
+      playersMap, executed: "b1", yesCount: 3, noCount: 1, majority: 3, round: 1, confirmVotes,
+      pickRandom: (arr) => arr[0], // 결정론적으로 첫 번째 후보를 고르도록 주입
+    });
+    expect(updates["players/b1/alive"]).toBe(false);
+    expect(["c1", "m1"]).toContain(bombTarget); // 후보는 찬성표를 던진 사람(본인 제외)이어야 함
+    expect(bombTarget).not.toBe("b1"); // 본인은 후보에서 제외돼야 함
+    expect(updates[`players/${bombTarget}/alive`]).toBe(false);
+    expect(logEntries.some(e => e.includes("폭탄마"))).toBe(true);
+  });
+
+  test("찬성표를 던진 사람이 본인(폭탄마)뿐이면 동반 사망이 발생하지 않아야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.b1 = { name: "폭탄마1", role: "bomber", alive: true };
+    const confirmVotes = { b1: "yes", c1: "no", c2: "no" };
+    const { bombTarget } = resolveConfirm({ playersMap, executed: "b1", yesCount: 1, noCount: 2, majority: 1, round: 1, confirmVotes });
+    expect(bombTarget).toBeNull();
+  });
+
+  test("이미 죽은 사람이 찬성표를 던졌던 기록이 있어도 동반 사망 대상에서 제외돼야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.b1 = { name: "폭탄마1", role: "bomber", alive: true };
+    playersMap.deadVoter = { name: "죽은사람", role: "citizen", alive: false };
+    const confirmVotes = { deadVoter: "yes", c1: "yes" };
+    const { bombTarget } = resolveConfirm({
+      playersMap, executed: "b1", yesCount: 2, noCount: 0, majority: 2, round: 1, confirmVotes,
+      pickRandom: (arr) => arr[0],
+    });
+    expect(bombTarget).toBe("c1"); // deadVoter는 후보에서 제외되어야 함
+  });
+
+  test("무작위 선택 결과가 여러 번 실행해도 항상 유효한 후보 중 하나여야 한다 (실제 Math.random 사용)", () => {
+    const playersMap = basePlayers();
+    playersMap.b1 = { name: "폭탄마1", role: "bomber", alive: true };
+    const confirmVotes = { c1: "yes", c2: "yes", m1: "yes", b1: "yes" };
+    const validCandidates = ["c1", "c2", "m1"];
+    for (let i = 0; i < 30; i++) {
+      const { bombTarget } = resolveConfirm({ playersMap, executed: "b1", yesCount: 4, noCount: 0, majority: 3, round: 1, confirmVotes });
+      expect(validCandidates).toContain(bombTarget);
+    }
+  });
+});
+
 describe("checkWin - 광대 제외 처리", () => {
   test("광대는 시민 인원수 계산에서 제외되어 마피아 승리 조건에 영향을 주지 않아야 한다", () => {
     const players = {
@@ -188,7 +236,7 @@ describe("checkWin - 광대 제외 처리", () => {
 
 describe("recommendedRoles - 인원수별 자동 밸런스", () => {
   const specialTotal = (roles) => Object.values(roles).reduce((a, b) => a + b, 0);
-  const mafiaTeamTotal = (roles) => roles.mafia + roles.mafiaBoss + roles.framer;
+  const mafiaTeamTotal = (roles) => roles.mafia + roles.mafiaBoss + roles.framer + roles.bomber;
 
   test("4명(최소 인원)이어도 특수 역할 합이 인원수를 넘지 않아야 한다", () => {
     const roles = recommendedRoles(4);
