@@ -260,13 +260,15 @@ function JoinScreen({ onJoined }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [joining, setJoining] = useState(false);
 
   const join = () => {
-    if (!name.trim() || code.length < 4) return;
+    if (!name.trim() || code.length < 4 || joining) return;
+    setJoining(true);
     onValue(ref(db, `rooms/${code.toUpperCase()}`), async (snap) => {
       const room = snap.val();
-      if (!room) { setError("방을 찾을 수 없어요!"); return; }
-      if (room.status !== "waiting") { setError("이미 시작된 게임이에요!"); return; }
+      if (!room) { setError("방을 찾을 수 없어요!"); setJoining(false); return; }
+      if (room.status !== "waiting") { setError("이미 시작된 게임이에요!"); setJoining(false); return; }
       const pid = String(Date.now());
       await update(ref(db, `rooms/${code.toUpperCase()}/players/${pid}`), { name: name.trim(), alive: true });
       onJoined(code.toUpperCase(), String(pid));
@@ -294,8 +296,8 @@ function JoinScreen({ onJoined }) {
         {error && <p style={{ color: T.red, fontSize: 12, marginTop: 8 }}>⚠ {error}</p>}
       </Card>
 
-      <Btn onClick={join} color={T.blue} disabled={!name.trim() || code.length < 4} style={{ padding: "16px", fontSize: 15, letterSpacing: 1 }}>
-        입장하기
+      <Btn onClick={join} color={T.blue} disabled={!name.trim() || code.length < 4 || joining} style={{ padding: "16px", fontSize: 15, letterSpacing: 1 }}>
+        {joining ? "입장 중..." : "입장하기"}
       </Btn>
     </PageWrap>
   );
