@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, update } from "firebase/database";
+import { ROLES_INFO, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm } from "./gameLogic";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvV_N8Ndp5jZFG56XNlxpypOktRBIZpOc",
@@ -16,45 +17,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-
-const ROLES_INFO = {
-  mafia:     { name: "마피아",      emoji: "🔫", color: "#e74c3c", bg: "#1a0000", border: "#5a0000", team: "mafia",   desc: "밤마다 시민 한 명을 제거하세요!", image: "/role-mafia.png" },
-  mafiaBoss: { name: "마피아 보스", emoji: "👑", color: "#e74c3c", bg: "#1a0000", border: "#5a0000", team: "mafia",   desc: "경찰 조사에 시민으로 위장됩니다!", image: "/role-mafiaboss.png" },
-  police:    { name: "경찰",        emoji: "🚔", color: "#3498db", bg: "#00091a", border: "#1a3a5c", team: "citizen", desc: "매 밤 한 명을 조사해 마피아인지 확인하세요.", image: "/role-police.png" },
-  doctor:    { name: "의사",        emoji: "⚕️", color: "#2ecc71", bg: "#001a0a", border: "#1a5c2a", team: "citizen", desc: "매 밤 한 명을 보호해 마피아 공격을 막으세요.", image: "/role-doctor.png" },
-  reporter:  { name: "기자",        emoji: "📰", color: "#f1c40f", bg: "#1a1400", border: "#5c4a00", team: "citizen", desc: "단 한 번, 한 명의 직업을 모두에게 공개할 수 있습니다.", image: "/role-reporter.png" },
-  lawyer:    { name: "변호사",      emoji: "⚖️", color: "#9b59b6", bg: "#0d001a", border: "#3a1a5c", team: "citizen", desc: "단 한 번, 처형 예정인 플레이어를 구할 수 있습니다.", image: "/role-lawyer.png" },
-  citizen:   { name: "시민",        emoji: "👤", color: "#95a5a6", bg: "#111",    border: "#2a2a2a", team: "citizen", desc: "마피아를 찾아내어 처형하세요!", image: "/role-citizen.png" },
-};
-
-const isMafia = (role) => role === "mafia" || role === "mafiaBoss";
-const revealRole = (role) => isMafia(role) ? `${ROLES_INFO[role].emoji} ${ROLES_INFO[role].name}` : "👤 시민";
-
-function generateCode() {
-  return Math.random().toString(36).substring(2, 6).toUpperCase();
-}
-
-function shuffleRoles(playerCount, roleConfig, citizenCount) {
-  const list = [];
-  Object.entries(roleConfig).forEach(([id, count]) => {
-    for (let i = 0; i < count; i++) list.push(id);
-  });
-  for (let i = 0; i < citizenCount; i++) list.push("citizen");
-  for (let i = list.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [list[i], list[j]] = [list[j], list[i]];
-  }
-  return list;
-}
-
-function checkWin(players) {
-  const alive = Object.values(players).filter(p => p.alive);
-  const aliveMafia = alive.filter(p => isMafia(p.role));
-  const aliveCitizen = alive.filter(p => !isMafia(p.role));
-  if (aliveMafia.length === 0) return "citizen";
-  if (aliveMafia.length >= aliveCitizen.length) return "mafia";
-  return null;
-}
 
 // ── 디자인 토큰 ──
 const T = {
@@ -204,7 +166,7 @@ function TitleScreen({ onHost, onJoin }) {
 // ── 방 만들기 (사회자) ──
 function HostScreen({ onCreated }) {
   const [playerCount, setPlayerCount] = useState(8);
-  const [roles, setRoles] = useState({ mafia: 2, mafiaBoss: 0, police: 1, doctor: 1, reporter: 0, lawyer: 0 });
+  const [roles, setRoles] = useState({ mafia: 2, mafiaBoss: 0, police: 1, doctor: 1, reporter: 0, lawyer: 0, terrorist: 0, priest: 0, jester: 0, framer: 0 });
 
   const specialTotal = Object.values(roles).reduce((a, b) => a + b, 0);
   const citizenCount = playerCount - specialTotal;
@@ -237,6 +199,10 @@ function HostScreen({ onCreated }) {
     { id: "doctor", label: "의사", emoji: "⚕️", color: T.green },
     { id: "reporter", label: "기자", emoji: "📰", color: T.yellow },
     { id: "lawyer", label: "변호사", emoji: "⚖️", color: T.purple },
+    { id: "terrorist", label: "테러리스트", emoji: "🧨", color: "#e67e22" },
+    { id: "priest", label: "성직자", emoji: "✝️", color: "#ecf0f1" },
+    { id: "jester", label: "광대", emoji: "🤡", color: "#e84393" },
+    { id: "framer", label: "모함가", emoji: "🎭", color: T.red },
   ];
 
   return (
@@ -252,7 +218,7 @@ function HostScreen({ onCreated }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4 }}>
           <button type="button" onClick={() => setPlayerCount(p => Math.max(4, p - 1))} style={{ width: 40, height: 40, background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 20, cursor: "pointer" }}>−</button>
           <span style={{ flex: 1, textAlign: "center", fontSize: 36, fontWeight: 900, color: T.text }}>{playerCount}</span>
-          <button type="button" onClick={() => setPlayerCount(p => Math.min(20, p + 1))} style={{ width: 40, height: 40, background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 20, cursor: "pointer" }}>+</button>
+          <button type="button" onClick={() => setPlayerCount(p => Math.min(32, p + 1))} style={{ width: 40, height: 40, background: T.surface2, color: T.text, border: `1px solid ${T.border2}`, borderRadius: 8, fontSize: 20, cursor: "pointer" }}>+</button>
         </div>
       </Card>
 
@@ -461,16 +427,25 @@ function RoleRevealScreen({ code, playerId, onReady }) {
           width: 220, margin: "0 auto 24px",
           display: "flex", flexDirection: "column", alignItems: "center",
         }}>
-          <img src={ri.image} alt={ri.name} style={{
-            width: 220, height: 220, borderRadius: "50%", objectFit: "cover",
-            border: `3px solid ${ri.border}`,
-            boxShadow: `0 0 50px ${ri.color}55`,
-          }} />
+          {ri.image ? (
+            <img src={ri.image} alt={ri.name} style={{
+              width: 220, height: 220, borderRadius: "50%", objectFit: "cover",
+              border: `3px solid ${ri.border}`,
+              boxShadow: `0 0 50px ${ri.color}55`,
+            }} />
+          ) : (
+            <div style={{
+              width: 220, height: 220, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 96, background: ri.bg,
+              border: `3px solid ${ri.border}`,
+              boxShadow: `0 0 50px ${ri.color}55`,
+            }}>{ri.emoji}</div>
+          )}
           <h3 style={{ color: ri.color, fontSize: 22, fontWeight: 900, margin: "16px 0 8px", textShadow: `0 0 20px ${ri.color}` }}>{ri.name}</h3>
           <p style={{ color: T.textDim, fontSize: 12, textAlign: "center", lineHeight: 1.7, maxWidth: 260 }}>{ri.desc}</p>
-          <div style={{ marginTop: 12, padding: "3px 14px", borderRadius: 20, background: ri.team === "mafia" ? "#2a000066" : "#00200066", border: `1px solid ${ri.team === "mafia" ? T.red + "44" : T.green + "44"}` }}>
-            <span style={{ fontSize: 10, color: ri.team === "mafia" ? T.red : T.green, letterSpacing: 2, fontWeight: 700 }}>
-              {ri.team === "mafia" ? "MAFIA" : "CITIZEN"}
+          <div style={{ marginTop: 12, padding: "3px 14px", borderRadius: 20, background: ri.team === "mafia" ? "#2a000066" : ri.team === "jester" ? "#2a001a66" : "#00200066", border: `1px solid ${ri.team === "mafia" ? T.red + "44" : ri.team === "jester" ? "#e8439344" : T.green + "44"}` }}>
+            <span style={{ fontSize: 10, color: ri.team === "mafia" ? T.red : ri.team === "jester" ? "#e84393" : T.green, letterSpacing: 2, fontWeight: 700 }}>
+              {ri.team === "mafia" ? "MAFIA" : ri.team === "jester" ? "SOLO" : "CITIZEN"}
             </span>
           </div>
         </div>
@@ -522,52 +497,11 @@ function HostGameScreen({ code, onEnd }) {
   Object.values(votes).forEach(v => { if (v) voteCounts[v] = (voteCounts[v] || 0) + 1; });
 
   const processNight = async () => {
-    const doctorTarget = nightActions.doctor;
-    const policeTarget = nightActions.police;
-    const reporterTarget = nightActions.reporter;
     const mafiaTarget = topMafiaTarget || null;
+    const { updates: resolved, logEntries, killed, revivedIds } = resolveNight({ playersMap, nightActions, round, mafiaTarget });
 
     const updates = {};
-    let killed = null;
-    const logEntries = [];
-
-    if (mafiaTarget && mafiaTarget !== doctorTarget) {
-      updates[`rooms/${code}/players/${mafiaTarget}/alive`] = false;
-      updates[`rooms/${code}/players/${mafiaTarget}/deathRound`] = round;
-      killed = mafiaTarget;
-      logEntries.push(`🔫 마피아가 ${playersMap[mafiaTarget]?.name}을(를) 처형했습니다`);
-    } else if (mafiaTarget && mafiaTarget === doctorTarget) {
-      logEntries.push(`🔫 마피아가 누군가를 노렸지만 의사가 살렸습니다`);
-    } else {
-      logEntries.push(`🌙 마피아가 아무도 처형하지 않았습니다`);
-    }
-
-    if (doctorTarget && mafiaTarget !== doctorTarget) {
-      logEntries.push(`⚕️ 의사가 밤사이 누군가를 보호했습니다`);
-    }
-
-    if (policeTarget) {
-      const targetRole = playersMap[policeTarget]?.role;
-      const result = targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민";
-      updates[`rooms/${code}/policeResult`] = {
-        round, targetId: policeTarget,
-        targetName: playersMap[policeTarget]?.name,
-        result,
-      };
-      logEntries.push(`🚔 경찰이 밤사이 누군가를 조사했습니다`);
-    }
-
-    if (reporterTarget) {
-      const targetRole = playersMap[reporterTarget]?.role;
-      // 정확한 직업명 표시 (마피아 보스도 구분)
-      const result = targetRole === "mafiaBoss" ? "마피아 보스" : isMafia(targetRole) ? "마피아" : ROLES_INFO[targetRole]?.name || "시민";
-      updates[`rooms/${code}/reporterReveal`] = {
-        round, targetId: reporterTarget,
-        targetName: playersMap[reporterTarget]?.name,
-        result,
-      };
-      logEntries.push(`📰 기자가 ${playersMap[reporterTarget]?.name}의 직업을 공개했습니다 (${result})`);
-    }
+    Object.entries(resolved).forEach(([k, v]) => { updates[`rooms/${code}/${k}`] = v; });
 
     // 로그 저장
     const logKey = `r${String(round).padStart(3, "0")}_b_밤${round}`;
@@ -586,6 +520,7 @@ function HostGameScreen({ code, onEnd }) {
 
     const updatedPlayers = { ...playersMap };
     if (killed) updatedPlayers[killed] = { ...updatedPlayers[killed], alive: false };
+    revivedIds.forEach(id => { updatedPlayers[id] = { ...updatedPlayers[id], alive: true }; });
     const win = checkWin(updatedPlayers);
     if (win) { updates[`rooms/${code}/winner`] = win; onEnd(win); }
 
@@ -638,20 +573,10 @@ function HostGameScreen({ code, onEnd }) {
     const aliveCnt = Object.values(playersMap).filter(p => p.alive).length;
     const majority = Math.floor(aliveCnt / 2) + 1;
 
+    const { updates: resolved, logEntries, bombTarget, jesterWin } = resolveConfirm({ playersMap, executed, yesCount, noCount, majority, round });
+
     const updates = {};
-    const logEntries = [];
-
-    if (yesCount >= majority) {
-      // 처형 확정
-      updates[`rooms/${code}/players/${executed}/alive`] = false;
-      updates[`rooms/${code}/lastExecution`] = { round, playerId: executed, playerName: playersMap[executed]?.name, role: playersMap[executed]?.role };
-      logEntries.push(`🗳️ 찬성 ${yesCount}표로 ${playersMap[executed]?.name}이(가) 처형됐습니다 (${revealRole(playersMap[executed]?.role)})`);
-    } else {
-      // 처형 취소
-      updates[`rooms/${code}/lastExecution`] = { round, playerId: null };
-      logEntries.push(`🗳️ 반대 ${noCount}표로 ${playersMap[executed]?.name}의 처형이 취소됐습니다`);
-    }
-
+    Object.entries(resolved).forEach(([k, v]) => { updates[`rooms/${code}/${k}`] = v; });
     updates[`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries, order: round * 10 };
     updates[`rooms/${code}/phase`] = "night";
     updates[`rooms/${code}/votes`] = null;
@@ -659,8 +584,16 @@ function HostGameScreen({ code, onEnd }) {
     updates[`rooms/${code}/confirmTarget`] = null;
     updates[`rooms/${code}/lawyerBlock`] = null;
 
+    if (jesterWin) {
+      updates[`rooms/${code}/winner`] = "jester";
+      await update(ref(db), updates);
+      onEnd("jester");
+      return;
+    }
+
     const updatedPlayers = { ...playersMap };
     if (yesCount >= majority && executed) updatedPlayers[executed] = { ...updatedPlayers[executed], alive: false };
+    if (bombTarget) updatedPlayers[bombTarget] = { ...updatedPlayers[bombTarget], alive: false };
     const win = checkWin(updatedPlayers);
     if (win) { updates[`rooms/${code}/winner`] = win; onEnd(win); }
 
@@ -755,15 +688,24 @@ function HostGameScreen({ code, onEnd }) {
                     🔫 {p.mafiaVote ? `→ ${playersMap[p.mafiaVote]?.name}` : "미선택"}
                   </p>
                 )}
-                {/* 특수역할 행동 */}
+                {/* 특수역할 행동 (직업당 여러 명이어도 개인별로 표시) */}
                 {isNight && p.alive && p.role === "doctor" && (
-                  <p style={{ fontSize: 11, color: "#2ecc71", marginTop: 4 }}>⚕️ {nightActions.doctor ? `→ ${playersMap[nightActions.doctor]?.name}` : "미선택"}</p>
+                  <p style={{ fontSize: 11, color: "#2ecc71", marginTop: 4 }}>⚕️ {nightActions.doctor?.[pid] ? `→ ${playersMap[nightActions.doctor[pid]]?.name}` : "미선택"}</p>
                 )}
                 {isNight && p.alive && p.role === "police" && (
-                  <p style={{ fontSize: 11, color: "#3498db", marginTop: 4 }}>🚔 {nightActions.police ? `→ ${playersMap[nightActions.police]?.name}` : "미선택"}</p>
+                  <p style={{ fontSize: 11, color: "#3498db", marginTop: 4 }}>🚔 {nightActions.police?.[pid] ? `→ ${playersMap[nightActions.police[pid]]?.name}` : "미선택"}</p>
                 )}
                 {isNight && p.alive && p.role === "reporter" && (
-                  <p style={{ fontSize: 11, color: "#f1c40f", marginTop: 4 }}>📰 {nightActions.reporter ? `→ ${playersMap[nightActions.reporter]?.name}` : room.reporterReveal ? "사용 완료" : "미선택"}</p>
+                  <p style={{ fontSize: 11, color: "#f1c40f", marginTop: 4 }}>📰 {nightActions.reporter?.[pid] ? `→ ${playersMap[nightActions.reporter[pid]]?.name}` : p.reporterUsed ? "사용 완료" : "미선택"}</p>
+                )}
+                {isNight && p.alive && p.role === "priest" && (
+                  <p style={{ fontSize: 11, color: "#ecf0f1", marginTop: 4 }}>✝️ {nightActions.priest?.[pid] ? `→ ${playersMap[nightActions.priest[pid]]?.name}` : p.priestUsed ? "사용 완료" : "미선택"}</p>
+                )}
+                {isNight && p.alive && p.role === "framer" && (
+                  <p style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>🎭 {nightActions.framer?.[pid] ? `→ ${playersMap[nightActions.framer[pid]]?.name}` : "미선택"}</p>
+                )}
+                {p.alive && p.role === "terrorist" && (
+                  <p style={{ fontSize: 11, color: "#e67e22", marginTop: 4 }}>🧨 {p.terroristTarget ? `→ ${playersMap[p.terroristTarget]?.name}` : "미선택"}</p>
                 )}
                 {/* 투표 현황 */}
                 {phase === "vote" && p.alive && (
@@ -802,20 +744,49 @@ function HostGameScreen({ code, onEnd }) {
                 {aliveMafiaEntries.filter(([, p]) => p.mafiaVote).length}/{aliveMafiaEntries.length}명 투표
               </p>
             </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>⚕️ 의사</p>
-              <p style={{ fontSize: 14, fontWeight: 700 }}>{nightActions.doctor ? playersMap[nightActions.doctor]?.name : "—"}</p>
-            </div>
-            <div style={{ flex: 1, minWidth: 120 }}>
-              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🚔 경찰</p>
-              <p style={{ fontSize: 14, fontWeight: 700 }}>{nightActions.police ? playersMap[nightActions.police]?.name : "—"}</p>
-            </div>
-            {!room.reporterReveal && (
-              <div style={{ flex: 1, minWidth: 120 }}>
-                <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>📰 기자</p>
-                <p style={{ fontSize: 14, fontWeight: 700 }}>{nightActions.reporter ? playersMap[nightActions.reporter]?.name : "—"}</p>
-              </div>
-            )}
+            {(() => {
+              const aliveByRole = (role) => playerEntries.filter(([, p]) => p.role === role && p.alive);
+              const doctors = aliveByRole("doctor");
+              const polices = aliveByRole("police");
+              const reporters = aliveByRole("reporter").filter(([, p]) => !p.reporterUsed);
+              const priests = aliveByRole("priest").filter(([, p]) => !p.priestUsed);
+              const framers = aliveByRole("framer");
+              const doneCount = (actions, entries) => entries.filter(([id]) => !!actions?.[id]).length;
+              return (
+                <>
+                  {doctors.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>⚕️ 의사</p>
+                      <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.doctor, doctors)}/{doctors.length}명 선택 완료</p>
+                    </div>
+                  )}
+                  {polices.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🚔 경찰</p>
+                      <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.police, polices)}/{polices.length}명 선택 완료</p>
+                    </div>
+                  )}
+                  {reporters.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>📰 기자</p>
+                      <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.reporter, reporters)}/{reporters.length}명 선택 완료</p>
+                    </div>
+                  )}
+                  {priests.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>✝️ 성직자</p>
+                      <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.priest, priests)}/{priests.length}명 선택 완료</p>
+                    </div>
+                  )}
+                  {framers.length > 0 && (
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🎭 모함가</p>
+                      <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.framer, framers)}/{framers.length}명 선택 완료</p>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -879,9 +850,6 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const [room, setRoom] = useState(null);
   const [voteTarget, setVoteTarget] = useState(null);
   const [voteSubmitted, setVoteSubmitted] = useState(false);
-  const [policeResult, setPoliceResult] = useState(null);
-  const [nightTarget, setNightTarget] = useState(null);
-  const [nightSubmitted, setNightSubmitted] = useState(false);
   const [lawyerUsed, setLawyerUsed] = useState(false);
   const [showNightOverlay, setShowNightOverlay] = useState(false);
   const [showDayOverlay, setShowDayOverlay] = useState(false);
@@ -908,7 +876,6 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
     }
     prevPhaseRef.current = room.phase;
     setVoteTarget(null); setVoteSubmitted(false);
-    setPoliceResult(null); setNightTarget(null); setNightSubmitted(false);
   }, [room?.phase, room?.round]);
 
   if (!room) return <PageWrap><p style={{ color: "#555" }}>로딩 중...</p></PageWrap>;
@@ -931,8 +898,19 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const mafiaTeam = playerEntries.filter(([id, p]) => isMafia(p.role) && p.alive && id !== playerId);
   const myMafiaVote = playersMap[playerId]?.mafiaVote || null;
   const mv = room.mafiaVoting || {};
-  const reporterAlreadyUsed = !!room.reporterReveal;
+  const reporterAlreadyUsed = !!playersMap[playerId]?.reporterUsed;
+  const priestAlreadyUsed = !!playersMap[playerId]?.priestUsed;
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
+  const nightActions = room.nightActions || {};
+  const myDoctorTarget = nightActions.doctor?.[playerId] || null;
+  const myPoliceTarget = nightActions.police?.[playerId] || null;
+  const myReporterTarget = nightActions.reporter?.[playerId] || null;
+  const myPriestTarget = nightActions.priest?.[playerId] || null;
+  const myNightPick = myRole === "doctor" ? myDoctorTarget : myRole === "police" ? myPoliceTarget : myRole === "reporter" ? myReporterTarget : null;
+  const myTerroristTarget = playersMap[playerId]?.terroristTarget || null;
+  const myFramerTarget = nightActions.framer?.[playerId] || null;
+  const myPoliceResult = room.policeResults?.[playerId];
+  const showPoliceResult = phase === "day" && myPoliceResult?.round === round - 1;
 
   const submitConfirmVote = async (v) => {
     if (!amAlive || myConfirmVote) return;
@@ -951,33 +929,28 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
     }
   };
 
+  // 직업당 여러 명이 배치돼도 각자 개인 경로(nightActions/{role}/{playerId})에 독립적으로 기록한다.
   const submitNightAction = async (targetId) => {
     if (!amAlive) return;
-    let actionKey = myRole === "doctor" ? "doctor" : myRole === "police" ? "police" : myRole === "reporter" ? "reporter" : null;
-    if (!actionKey) return;
     // 경찰은 한번 선택하면 변경 불가
     if (myRole === "police") {
-      if (nightTarget) return;
-      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
-      const targetRole = playersMap[targetId]?.role;
-      setPoliceResult({ name: playersMap[targetId]?.name, result: targetRole === "mafiaBoss" ? "시민" : isMafia(targetRole) ? "마피아" : "시민" });
-      setNightTarget(targetId);
+      if (myPoliceTarget) return;
+      await update(ref(db, `rooms/${code}/nightActions/police`), { [playerId]: targetId });
       return;
     }
     // 기자는 한번 선택하면 변경 불가 (1회 사용)
     if (myRole === "reporter") {
-      if (nightTarget) return;
-      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
-      setNightTarget(targetId);
+      if (myReporterTarget || reporterAlreadyUsed) return;
+      await update(ref(db, `rooms/${code}/nightActions/reporter`), { [playerId]: targetId });
       return;
     }
     // 의사는 같은 사람 누르면 취소, 다른 사람 누르면 변경
-    if (nightTarget === targetId) {
-      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: null });
-      setNightTarget(null);
-    } else {
-      await update(ref(db, `rooms/${code}/nightActions`), { [actionKey]: targetId });
-      setNightTarget(targetId);
+    if (myRole === "doctor") {
+      if (myDoctorTarget === targetId) {
+        await update(ref(db, `rooms/${code}/nightActions/doctor`), { [playerId]: null });
+      } else {
+        await update(ref(db, `rooms/${code}/nightActions/doctor`), { [playerId]: targetId });
+      }
     }
   };
 
@@ -993,6 +966,30 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
   const useLawyer = async () => {
     if (room.lawyerBlock || room.lawyerUsed) return;
     await update(ref(db, `rooms/${code}`), { lawyerBlock: true, lawyerUsed: true });
+  };
+
+  // 테러리스트 폭탄 대상 선택 (같은 사람 누르면 취소, 낮/밤 상관없이 유지됨)
+  const selectTerroristTarget = async (targetId) => {
+    if (myTerroristTarget === targetId) {
+      await update(ref(db, `rooms/${code}/players/${playerId}`), { terroristTarget: null });
+    } else {
+      await update(ref(db, `rooms/${code}/players/${playerId}`), { terroristTarget: targetId });
+    }
+  };
+
+  // 성직자 부활 대상 선택 (본인 기준 게임 중 1회, 사망자만 선택 가능)
+  const submitPriestRevive = async (targetId) => {
+    if (!amAlive || priestAlreadyUsed || myPriestTarget) return;
+    await update(ref(db, `rooms/${code}/nightActions/priest`), { [playerId]: targetId });
+  };
+
+  // 모함가 누명 대상 선택 (매일 밤 변경 가능)
+  const selectFramerTarget = async (targetId) => {
+    if (myFramerTarget === targetId) {
+      await update(ref(db, `rooms/${code}/nightActions/framer`), { [playerId]: null });
+    } else {
+      await update(ref(db, `rooms/${code}/nightActions/framer`), { [playerId]: targetId });
+    }
   };
 
   const lastDeath = room.lastDeath;
@@ -1090,13 +1087,13 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
         </Card>
       )}
 
-      {phase === "day" && room.reporterReveal?.round === round - 1 && (
-        <Card style={{ border: "1px solid #5c4a00", background: "#1a1400" }}>
+      {phase === "day" && Object.entries(room.reporterReveals || {}).filter(([, r]) => r.round === round - 1).map(([rid, r]) => (
+        <Card key={rid} style={{ border: "1px solid #5c4a00", background: "#1a1400" }}>
           <p style={{ color: "#f1c40f", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>📰 기자 속보!</p>
-          <p style={{ fontSize: 15 }}><strong>{room.reporterReveal.targetName}</strong>님의 직업은{" "}
-            <span style={{ color: room.reporterReveal.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{room.reporterReveal.result}</span>입니다!</p>
+          <p style={{ fontSize: 15 }}><strong>{r.targetName}</strong>님의 직업은{" "}
+            <span style={{ color: r.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{r.result}</span>입니다!</p>
         </Card>
-      )}
+      ))}
 
       {isNight && lastExecution?.round === round - 1 && (
         <Card style={{ border: "1px solid #3a0000", background: "#0d0000" }}>
@@ -1111,11 +1108,11 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
         </Card>
       )}
 
-      {myRole === "police" && policeResult && (
+      {myRole === "police" && showPoliceResult && (
         <Card style={{ border: "1px solid #1a3a5c", background: "#00091a" }}>
-          <p style={{ color: "#3498db", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🚔 조사 결과 (나만 보여요)</p>
-          <p style={{ fontSize: 15 }}><strong>{policeResult.name}</strong>님은{" "}
-            <span style={{ color: policeResult.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{policeResult.result}</span>입니다!</p>
+          <p style={{ color: "#3498db", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🚔 어젯밤 조사 결과 (나만 보여요)</p>
+          <p style={{ fontSize: 15 }}><strong>{myPoliceResult.targetName}</strong>님은{" "}
+            <span style={{ color: myPoliceResult.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{myPoliceResult.result}</span>입니다!</p>
         </Card>
       )}
 
@@ -1215,6 +1212,72 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
         </Card>
       )}
 
+      {/* 모함가 능력 패널 */}
+      {myRole === "framer" && isNight && amAlive && (
+        <Card style={{ border: `1px solid ${T.red}44`, background: T.surface }}>
+          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🎭 모함가 능력 (나만 보여요)</p>
+          <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>선택한 대상이 경찰에게 조사당하면 결과가 "마피아"로 조작됩니다.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
+              <div key={id} onClick={() => selectFramerTarget(id)} style={{
+                padding: "11px 14px", borderRadius: 8, cursor: "pointer",
+                background: myFramerTarget === id ? `${T.red}22` : T.surface2,
+                border: `1px solid ${myFramerTarget === id ? T.red : T.border2}`,
+                display: "flex", alignItems: "center", transition: "all 0.15s",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
+                {myFramerTarget === id && <span style={{ color: T.red, fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* 성직자 능력 패널 */}
+      {myRole === "priest" && isNight && amAlive && !priestAlreadyUsed && (
+        <Card style={{ border: "1px solid #4a4a4a", background: T.surface }}>
+          <p style={{ color: "#ecf0f1", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>✝️ 성직자 능력 (1회) — 부활시킬 사람 선택</p>
+          {deadPlayers.length === 0
+            ? <p style={{ color: T.textMute, fontSize: 12 }}>아직 사망자가 없습니다...</p>
+            : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {deadPlayers.map(([id, p]) => (
+                  <div key={id} onClick={() => submitPriestRevive(id)} style={{
+                    padding: "11px 14px", borderRadius: 8, cursor: myPriestTarget ? "default" : "pointer",
+                    background: myPriestTarget === id ? "#ffffff22" : T.surface2,
+                    border: `1px solid ${myPriestTarget === id ? "#ecf0f1" : T.border2}`,
+                    display: "flex", alignItems: "center", transition: "all 0.15s",
+                  }}>
+                    <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
+                    {myPriestTarget === id && <span style={{ color: "#ecf0f1", fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+        </Card>
+      )}
+
+      {/* 테러리스트 능력 패널 */}
+      {myRole === "terrorist" && amAlive && (
+        <Card style={{ border: "1px solid #5c3300", background: T.surface }}>
+          <p style={{ color: "#e67e22", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🧨 테러리스트 능력 (나만 보여요)</p>
+          <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>처형당하면 아래 선택한 대상이 함께 죽습니다. 언제든 바꿀 수 있어요.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {alivePlayers.filter(([id]) => id !== playerId).map(([id, p]) => (
+              <div key={id} onClick={() => selectTerroristTarget(id)} style={{
+                padding: "11px 14px", borderRadius: 8, cursor: "pointer",
+                background: myTerroristTarget === id ? "#e67e2222" : T.surface2,
+                border: `1px solid ${myTerroristTarget === id ? "#e67e22" : T.border2}`,
+                display: "flex", alignItems: "center", transition: "all 0.15s",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
+                {myTerroristTarget === id && <span style={{ color: "#e67e22", fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* 생존자 목록 */}
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
@@ -1226,7 +1289,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
           {alivePlayers.map(([id, p]) => {
             const isMe = id === playerId;
             const myVote = voteTarget === id;
-            const isNightSelected = nightTarget === id;
+            const isNightSelected = myNightPick === id;
             // 의사는 자기 자신도 보호 가능, 나머지는 본인 선택 불가
             const canSelfTarget = myRole === "doctor";
             const canClick = (!isMe || canSelfTarget) && amAlive && (
@@ -1264,17 +1327,21 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
       <Card style={{ borderLeft: `3px solid ${isNight ? "#3498db" : phase === "vote" ? "#e74c3c" : "#f1c40f"}`, background: "#0d0d0d" }}>
         {phase === "day" && <p style={{ color: "#888", fontSize: 13 }}>☀️ 자유롭게 토론하세요. 사회자가 투표를 시작하면 참여하세요.</p>}
         {isNight && !amAlive && <p style={{ color: "#444", fontSize: 13 }}>💀 사망 상태입니다. 조용히 지켜보세요.</p>}
-        {isNight && amAlive && amMafia && <p style={{ color: "#e74c3c", fontSize: 13 }}>🔫 위 마피아 패널에서 대상을 선택하고 동의하세요.</p>}
-        {isNight && amAlive && !amMafia && !needsNightAction && <p style={{ color: "#666", fontSize: 13 }}>👤 눈을 감고 기다리세요...</p>}
+        {isNight && amAlive && myRole === "framer" && <p style={{ color: T.red, fontSize: 13 }}>🎭 위 모함가 패널에서 누명 씌울 대상을 선택하세요. (마피아 킬 투표도 함께 참여하세요)</p>}
+        {isNight && amAlive && amMafia && myRole !== "framer" && <p style={{ color: "#e74c3c", fontSize: 13 }}>🔫 위 마피아 패널에서 대상을 선택하고 동의하세요.</p>}
+        {isNight && amAlive && myRole === "priest" && !priestAlreadyUsed && <p style={{ color: "#ecf0f1", fontSize: 13 }}>✝️ 위 성직자 패널에서 부활시킬 사람을 선택하세요.</p>}
+        {isNight && amAlive && myRole === "priest" && priestAlreadyUsed && <p style={{ color: "#666", fontSize: 13 }}>✝️ 이미 능력을 사용했습니다.</p>}
+        {amAlive && myRole === "terrorist" && <p style={{ color: "#e67e22", fontSize: 13 }}>🧨 위 테러리스트 패널에서 폭탄 대상을 선택해두세요. 처형당하면 함께 죽습니다.</p>}
+        {isNight && amAlive && !amMafia && !needsNightAction && !["priest", "terrorist"].includes(myRole) && <p style={{ color: "#666", fontSize: 13 }}>👤 눈을 감고 기다리세요...</p>}
         {isNight && amAlive && myRole === "reporter" && reporterAlreadyUsed && <p style={{ color: "#5c4a00", fontSize: 13 }}>📰 이미 능력을 사용했습니다.</p>}
-        {isNight && amAlive && needsNightAction && !nightSubmitted && (
+        {isNight && amAlive && needsNightAction && !myNightPick && (
           <p style={{ color: "#3498db", fontSize: 13 }}>
             {myRole === "doctor" && "⚕️ 보호할 사람을 선택하세요."}
             {myRole === "police" && "🚔 조사할 사람을 선택하세요."}
             {myRole === "reporter" && "📰 공개할 사람을 선택하세요."}
           </p>
         )}
-        {isNight && amAlive && needsNightAction && nightSubmitted && <p style={{ color: "#2ecc71", fontSize: 13 }}>✅ 행동 완료! 사회자가 넘길 때까지 기다리세요.</p>}
+        {isNight && amAlive && needsNightAction && myNightPick && <p style={{ color: "#2ecc71", fontSize: 13 }}>✅ 행동 완료! 사회자가 넘길 때까지 기다리세요.</p>}
         {phase === "vote" && !amAlive && <p style={{ color: "#444", fontSize: 13 }}>💀 사망 상태라 투표할 수 없습니다.</p>}
         {phase === "vote" && amAlive && !voteSubmitted && <p style={{ color: "#e74c3c", fontSize: 13 }}>🗳️ 처형할 사람을 선택하세요!</p>}
         {phase === "vote" && amAlive && voteSubmitted && <p style={{ color: "#2ecc71", fontSize: 13 }}>✅ 투표 완료! ({playersMap[voteTarget]?.name}에게 투표)</p>}
@@ -1286,9 +1353,10 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
 // ── 승리 화면 ──
 function WinScreen({ winner, myRole, isHost, onRestart, code }) {
   const isMafiaWin = winner === "mafia";
+  const isJesterWin = winner === "jester";
   const myTeam = myRole ? ROLES_INFO[myRole]?.team : null;
   const iWon = isHost ? false : myTeam === winner;
-  const winColor = isMafiaWin ? T.red : T.green;
+  const winColor = isJesterWin ? "#e84393" : isMafiaWin ? T.red : T.green;
   const [logs, setLogs] = useState({});
 
   useEffect(() => {
@@ -1314,10 +1382,10 @@ function WinScreen({ winner, myRole, isHost, onRestart, code }) {
         <div style={{ height: 1, width: 50, background: `linear-gradient(to left, transparent, ${winColor}66)` }} />
       </div>
 
-      <div style={{ fontSize: 64, marginBottom: 24 }}>{isMafiaWin ? "🔫" : "⚖️"}</div>
+      <div style={{ fontSize: 64, marginBottom: 24 }}>{isJesterWin ? "🤡" : isMafiaWin ? "🔫" : "⚖️"}</div>
 
       <h1 style={{ fontSize: 44, fontWeight: 900, color: winColor, marginBottom: 8, letterSpacing: 2, textShadow: `0 0 40px ${winColor}66` }}>
-        {isMafiaWin ? "마피아 승리" : "시민 승리"}
+        {isJesterWin ? "광대 승리" : isMafiaWin ? "마피아 승리" : "시민 승리"}
       </h1>
 
       <p style={{ fontSize: 16, color: isHost ? T.textMute : iWon ? T.gold : T.textMute, marginBottom: 52, letterSpacing: 1 }}>
