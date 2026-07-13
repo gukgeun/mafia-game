@@ -1455,6 +1455,8 @@ function WinScreen({ winner, myRole, isHost, onRestart, code }) {
 }
 
 // ── 메인 앱 ──
+const SESSION_KEY = "mafia_session";
+
 export default function App() {
   const [screen, setScreen] = useState("title");
   const [roomCode, setRoomCode] = useState("");
@@ -1462,8 +1464,59 @@ export default function App() {
   const [myRole, setMyRole] = useState(null);
   const [winner, setWinner] = useState(null);
   const [isHost, setIsHost] = useState(false);
+  const [booting, setBooting] = useState(true);
 
-  const reset = () => { setScreen("title"); setMyRole(null); setWinner(null); setRoomCode(""); setPlayerId(""); setIsHost(false); };
+  const reset = () => {
+    try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+    setScreen("title"); setMyRole(null); setWinner(null); setRoomCode(""); setPlayerId(""); setIsHost(false);
+  };
+
+  // 새로고침 시 저장된 세션으로 게임 화면 복구
+  useEffect(() => {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch (e) {}
+    if (!saved?.roomCode) { setBooting(false); return; }
+
+    onValue(ref(db, `rooms/${saved.roomCode}`), snap => {
+      const room = snap.val();
+      // 방이 사라졌으면 세션 정리하고 타이틀로
+      if (!room) { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} setBooting(false); return; }
+
+      setRoomCode(saved.roomCode);
+      setIsHost(!!saved.isHost);
+
+      if (saved.isHost) {
+        if (room.winner) { setWinner(room.winner); setScreen("hostgame"); }
+        else if (room.status === "playing") setScreen("hostgame");
+        else setScreen("hostlobby");
+      } else {
+        const me = room.players?.[saved.playerId];
+        // 플레이어가 방에서 제거됐으면 세션 정리
+        if (!me) { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} setBooting(false); return; }
+        setPlayerId(saved.playerId);
+        const role = me.role || saved.myRole || null;
+        setMyRole(role);
+        if (room.winner) { setWinner(room.winner); setScreen("playergame"); }
+        else if (room.status === "playing") setScreen(me.ready ? "playergame" : "role");
+        else setScreen("playerlobby");
+      }
+      setBooting(false);
+    }, { onlyOnce: true });
+  }, []); // eslint-disable-line
+
+  // 세션 상태 변화를 저장 (새로고침 대비)
+  useEffect(() => {
+    if (booting) return;
+    if (roomCode && (isHost || playerId)) {
+      try { localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, playerId, isHost, myRole })); } catch (e) {}
+    }
+  }, [booting, roomCode, playerId, isHost, myRole]);
+
+  if (booting) {
+    return (
+      <PageWrap><p style={{ color: T.textDim, fontSize: 14, textAlign: "center", padding: "40px 0" }}>불러오는 중...</p></PageWrap>
+    );
+  }
 
   return (
     <>
