@@ -16,7 +16,7 @@ export const ROLES_INFO = {
 };
 
 export const isMafia = (role) => role === "mafia" || role === "mafiaBoss" || role === "framer" || role === "bomber";
-export const revealRole = (role) => isMafia(role) ? `${ROLES_INFO[role].emoji} ${ROLES_INFO[role].name}` : "👤 시민";
+export const revealRole = (role) => isMafia(role) ? `${ROLES_INFO.mafia.emoji} ${ROLES_INFO.mafia.name}` : "👤 시민";
 
 export function generateCode() {
   return Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -130,12 +130,13 @@ export function resolveNight({ playersMap, nightActions, round, mafiaTarget }) {
   Object.entries(reporterActions).forEach(([reporterId, targetId]) => {
     if (!targetId) return;
     const targetRole = playersMap[targetId]?.role;
-    const result = targetRole === "mafiaBoss" ? "마피아 보스" : isMafia(targetRole) ? "마피아" : ROLES_INFO[targetRole]?.name || "시민";
+    const result = ROLES_INFO[targetRole]?.name || "시민";
     updates[`players/${reporterId}/reporterUsed`] = true;
     updates[`reporterReveals/${reporterId}`] = {
       round, targetId,
       targetName: playersMap[targetId]?.name,
       result,
+      isMafiaTeam: isMafia(targetRole),
     };
     logEntries.push(`📰 기자가 ${playersMap[targetId]?.name}의 직업을 공개했습니다 (${result})`);
   });

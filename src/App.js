@@ -163,8 +163,19 @@ function TitleScreen({ onHost, onJoin }) {
   );
 }
 
+// 뒤로가기 버튼
+const BackButton = ({ onClick }) => (
+  <button type="button" onClick={onClick} style={{
+    display: "flex", alignItems: "center", gap: 4, marginBottom: 16,
+    background: "none", border: "none", color: T.textDim, fontSize: 13,
+    fontFamily: "'Noto Sans KR', sans-serif", cursor: "pointer", padding: 0,
+  }}>
+    ← 뒤로가기
+  </button>
+);
+
 // ── 방 만들기 (사회자) ──
-function HostScreen({ onCreated }) {
+function HostScreen({ onCreated, onBack }) {
   const [playerCount, setPlayerCount] = useState(8);
   const [roles, setRoles] = useState(recommendedRoles(8));
 
@@ -213,6 +224,7 @@ function HostScreen({ onCreated }) {
 
   return (
     <PageWrap>
+      <BackButton onClick={onBack} />
       <div style={{ marginBottom: 28 }}>
         <Label color={T.gold}>사회자 모드</Label>
         <h2 style={{ fontSize: 24, fontWeight: 900, margin: "4px 0 4px", color: T.text }}>게임 설정</h2>
@@ -263,7 +275,7 @@ function HostScreen({ onCreated }) {
 }
 
 // ── 방 참가 (플레이어) ──
-function JoinScreen({ onJoined }) {
+function JoinScreen({ onJoined, onBack }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -286,6 +298,7 @@ function JoinScreen({ onJoined }) {
 
   return (
     <PageWrap>
+      <BackButton onClick={onBack} />
       <div style={{ marginBottom: 28 }}>
         <Label color={T.blue}>플레이어</Label>
         <h2 style={{ fontSize: 24, fontWeight: 900, margin: "4px 0", color: T.text }}>방 참가</h2>
@@ -1109,7 +1122,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
         <Card key={rid} style={{ border: "1px solid #5c4a00", background: "#1a1400" }}>
           <p style={{ color: "#f1c40f", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>📰 기자 속보!</p>
           <p style={{ fontSize: 15 }}><strong>{r.targetName}</strong>님의 직업은{" "}
-            <span style={{ color: r.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{r.result}</span>입니다!</p>
+            <span style={{ color: r.isMafiaTeam ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{r.result}</span>입니다!</p>
         </Card>
       ))}
 
@@ -1538,10 +1551,10 @@ export default function App() {
         />
       )}
       {screen === "host" && (
-        <HostScreen onCreated={(code, id) => { setRoomCode(code); setPlayerId(id); setIsHost(true); setScreen("hostlobby"); }} />
+        <HostScreen onCreated={(code, id) => { setRoomCode(code); setPlayerId(id); setIsHost(true); setScreen("hostlobby"); }} onBack={() => setScreen("title")} />
       )}
       {screen === "join" && (
-        <JoinScreen onJoined={(code, id) => { setRoomCode(code); setPlayerId(id); setScreen("playerlobby"); }} />
+        <JoinScreen onJoined={(code, id) => { setRoomCode(code); setPlayerId(id); setScreen("playerlobby"); }} onBack={() => setScreen("title")} />
       )}
       {screen === "hostlobby" && (
         <HostLobbyScreen code={roomCode} onStart={() => setScreen("hostgame")} />
