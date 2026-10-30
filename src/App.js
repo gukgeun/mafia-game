@@ -174,6 +174,45 @@ const BackButton = ({ onClick }) => (
   </button>
 );
 
+// 게임 중 처음으로 돌아가기 버튼 (확인 팝업 포함)
+const ExitGameButton = ({ onExit, isHost }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} style={{
+        display: "flex", alignItems: "center", gap: 4, marginBottom: 16,
+        background: "none", border: "none", color: T.textDim, fontSize: 13,
+        fontFamily: "'Noto Sans KR', sans-serif", cursor: "pointer", padding: 0,
+      }}>
+        🏠 처음으로
+      </button>
+      {open && (
+        <div onClick={() => setOpen(false)} style={{
+          position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.75)",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          fontFamily: "'Noto Sans KR', sans-serif",
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            width: "100%", maxWidth: 320, background: T.surface, border: `1px solid ${T.border2}`,
+            borderRadius: 12, padding: "24px 20px 16px", textAlign: "center",
+            boxShadow: `0 0 40px ${T.red}33`,
+          }}>
+            <p style={{ fontSize: 32, margin: "0 0 12px" }}>🏠</p>
+            <p style={{ color: T.text, fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>처음으로 돌아갈까요?</p>
+            <p style={{ color: T.textDim, fontSize: 12, lineHeight: 1.6, margin: "0 0 20px", whiteSpace: "pre-line" }}>
+              {isHost
+                ? "진행 중인 게임에서 나가게 됩니다.\n사회자가 나가면 이 게임은 다시 진행할 수 없어요."
+                : "진행 중인 게임에서 나가게 됩니다.\n나간 뒤에는 이 게임에 다시 들어올 수 없어요."}
+            </p>
+            <Btn onClick={onExit} color={T.red}>나가기</Btn>
+            <Btn onClick={() => setOpen(false)} color={T.textDim} outline>취소</Btn>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // ── 방 만들기 (사회자) ──
 function HostScreen({ onCreated, onBack }) {
   const [playerCount, setPlayerCount] = useState(8);
@@ -485,7 +524,7 @@ function RoleRevealScreen({ code, playerId, onReady }) {
 }
 
 // ── 사회자 게임 화면 ──
-function HostGameScreen({ code, onEnd }) {
+function HostGameScreen({ code, onEnd, onExit }) {
   const [room, setRoom] = useState(null);
 
   useEffect(() => onValue(ref(db, `rooms/${code}`), snap => setRoom(snap.val())), [code]);
@@ -635,6 +674,7 @@ function HostGameScreen({ code, onEnd }) {
 
   return (
     <PageWrap night={isNight} wide>
+      <ExitGameButton onExit={onExit} isHost />
       {/* 헤더 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -868,7 +908,7 @@ function HostGameScreen({ code, onEnd }) {
 }
 
 // ── 플레이어 게임 화면 ──
-function PlayerGameScreen({ code, playerId, myRole, onWin }) {
+function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
   const [room, setRoom] = useState(null);
   const [voteTarget, setVoteTarget] = useState(null);
   const [voteSubmitted, setVoteSubmitted] = useState(false);
@@ -1049,6 +1089,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin }) {
         </div>
       )}
 
+      <ExitGameButton onExit={onExit} />
       {/* 헤더 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <PhaseBadge phase={phase} round={round} />
@@ -1566,10 +1607,10 @@ export default function App() {
         <RoleRevealScreen code={roomCode} playerId={playerId} onReady={(role) => { setMyRole(role); setScreen("playergame"); }} />
       )}
       {screen === "hostgame" && !winner && (
-        <HostGameScreen code={roomCode} onEnd={(w) => setWinner(w)} />
+        <HostGameScreen code={roomCode} onEnd={(w) => setWinner(w)} onExit={reset} />
       )}
       {screen === "playergame" && !winner && (
-        <PlayerGameScreen code={roomCode} playerId={playerId} myRole={myRole} onWin={setWinner} />
+        <PlayerGameScreen code={roomCode} playerId={playerId} myRole={myRole} onWin={setWinner} onExit={reset} />
       )}
       {(screen === "hostgame" || screen === "playergame") && winner && (
         <WinScreen winner={winner} myRole={myRole} isHost={isHost} onRestart={reset} code={roomCode} />
