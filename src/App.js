@@ -214,10 +214,10 @@ function HowToPlay({ onClose }) {
               사회자가 투표를 시작하면 처형할 사람을 한 명씩 고릅니다. 가장 많은 표를 받은 사람이 처형 후보가 되며, 동률이면 아무도 처형되지 않습니다.
             </HowToStep>
             <HowToStep icon="🔨" title="3. 처형 찬반 투표">
-              후보를 정말 처형할지 찬성/반대로 투표합니다. 살아있는 인원의 과반이 찬성해야 처형됩니다. 처형된 사람의 정체는 "뱀파이어" 또는 "마을 주민"으로만 공개됩니다.
+              후보를 정말 처형할지 찬성/반대로 투표합니다. 살아있는 인원의 과반이 찬성해야 처형됩니다. 처형된 사람의 정체는 "뱀파이어" 또는 "마을 주민"으로만 공개됩니다. 🧹 수호 마녀는 이 단계에서 후보를 보고, 게임 중 단 한 번 마법으로 처형을 막을 수 있습니다.
             </HowToStep>
             <HowToStep icon="🌙" title="4. 밤: 능력 사용">
-              모두 고개를 숙이고, 능력이 있는 사람만 화면에서 몰래 대상을 고릅니다. 사회자가 밤을 끝내면 결과와 함께 다음 날 아침이 밝습니다.
+              모두 고개를 숙이고, 능력이 있는 사람만 화면에서 몰래 대상을 고릅니다. 🧪 연금술사는 어젯밤 보호한 사람을 연속으로 보호할 수 없습니다. 사회자가 밤을 끝내면 결과와 함께 다음 날 아침이 밝습니다.
             </HowToStep>
           </HowToSection>
 
@@ -764,12 +764,6 @@ function HostGameScreen({ code, onEnd, onExit }) {
     const updates = {};
     const logEntries = [];
 
-    if (room.lawyerBlock) {
-      logEntries.push(`⚖️ 수호 마녀가 이의를 제기해 처형이 취소됐습니다`);
-      updates[`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries, order: round * 10 };
-      await update(ref(db), { ...updates, [`rooms/${code}/phase`]: "night", [`rooms/${code}/votes`]: null, [`rooms/${code}/lawyerBlock`]: null, [`rooms/${code}/lastExecution`]: { round, playerId: null, blocked: true } });
-      return;
-    }
 
     let maxVotes = 0, executed = null;
     Object.entries(voteCounts).forEach(([id, cnt]) => { if (cnt > maxVotes) { maxVotes = cnt; executed = id; } });
@@ -801,6 +795,21 @@ function HostGameScreen({ code, onEnd, onExit }) {
   const processConfirm = async () => {
     const confirmVotes = room.confirmVotes || {};
     const executed = room.confirmTarget;
+
+    // 🧹 수호 마녀가 찬반 투표 중 마법을 걸었으면 처형 취소
+    if (room.lawyerBlock) {
+      const name = playersMap[executed]?.name;
+      await update(ref(db), {
+        [`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`]: { phase: `낮 ${round}라운드`, entries: [`🧹 수호 마녀의 마법으로 ${name}의 처형이 취소됐습니다`], order: round * 10 },
+        [`rooms/${code}/lastExecution`]: { round, playerId: null, blocked: true, playerName: name },
+        [`rooms/${code}/phase`]: "night",
+        [`rooms/${code}/votes`]: null,
+        [`rooms/${code}/confirmVotes`]: null,
+        [`rooms/${code}/confirmTarget`]: null,
+        [`rooms/${code}/lawyerBlock`]: null,
+      });
+      return;
+    }
     const { yes: yesCount, no: noCount } = countConfirm(confirmVotes, voteCtx);
     const aliveCnt = Object.values(playersMap).filter(p => p.alive).length;
     const majority = Math.floor(aliveCnt / 2) + 1;
@@ -875,13 +884,13 @@ function HostGameScreen({ code, onEnd, onExit }) {
           {phase === "vote" && (
             <button type="button" onClick={processVote}
               style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
-              {room.lawyerBlock ? "처형 취소" : "투표 종료"}
+              투표 종료
             </button>
           )}
           {phase === "confirm" && (
             <button type="button" onClick={processConfirm}
               style={{ padding: "8px 16px", background: T.red, color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif", letterSpacing: 1 }}>
-              처형 확정
+              {room.lawyerBlock ? "처형 취소 (수호 마녀)" : "처형 확정"}
             </button>
           )}
         </div>
@@ -1051,9 +1060,9 @@ function HostGameScreen({ code, onEnd, onExit }) {
       )}
 
       {/* 변호사 이의 */}
-      {phase === "vote" && room.lawyerBlock && (
+      {phase === "confirm" && room.lawyerBlock && (
         <div style={{ background: T.surface, border: `1px solid ${T.purple}44`, borderLeft: `3px solid ${T.purple}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
-          <p style={{ color: T.purple, fontWeight: 700, fontSize: 13 }}>⚖️ 수호 마녀가 이의를 제기했습니다! 처형이 취소됩니다.</p>
+          <p style={{ color: T.purple, fontWeight: 700, fontSize: 13 }}>🧹 수호 마녀가 마법을 걸었습니다! "처형 취소"를 누르면 처형 없이 밤으로 넘어갑니다.</p>
         </div>
       )}
 
@@ -1147,6 +1156,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
   const needsNightAction = ["doctor", "police", "reporter"].includes(myRole) && !(myRole === "reporter" && reporterAlreadyUsed);
   const nightActions = room.nightActions || {};
   const myDoctorTarget = nightActions.doctor?.[playerId] || null;
+  // 연금술사는 어젯밤 보호한 사람을 연속으로 보호할 수 없다
+  const myLastProtected = myRole === "doctor" ? playersMap[playerId]?.lastProtected || null : null;
   const myPoliceTarget = nightActions.police?.[playerId] || null;
   const myReporterTarget = nightActions.reporter?.[playerId] || null;
   const myPriestTarget = nightActions.priest?.[playerId] || null;
@@ -1201,6 +1212,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
     }
     // 의사는 같은 사람 누르면 취소, 다른 사람 누르면 변경
     if (myRole === "doctor") {
+      if (targetId === myLastProtected) return;
       if (myDoctorTarget === targetId) {
         await update(ref(db, `rooms/${code}/nightActions/doctor`), { [playerId]: null });
       } else {
@@ -1224,8 +1236,10 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
     }
   };
 
+  // 수호 마녀: 처형 찬반 투표 중 후보를 보고 1회 사용
   const useLawyer = async () => {
-    if (room.lawyerBlock || room.lawyerUsed) return;
+    if (room.lawyerBlock || room.lawyerUsed || phase !== "confirm") return;
+    if (!window.confirm(`${playersMap[confirmTarget]?.name}의 처형을 마법으로 막을까요?\n게임 중 단 한 번만 쓸 수 있습니다.`)) return;
     await update(ref(db, `rooms/${code}`), { lawyerBlock: true, lawyerUsed: true });
   };
 
@@ -1394,7 +1408,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {isNight && lastExecution?.round === round - 1 && (
         <Card style={{ border: "1px solid #3a0000", background: "#0d0000" }}>
           {lastExecution.blocked
-            ? <p style={{ color: "#9b59b6", fontWeight: 700 }}>⚖️ 수호 마녀의 이의로 처형이 취소됐습니다!</p>
+            ? <p style={{ color: "#9b59b6", fontWeight: 700 }}>🧹 수호 마녀의 마법으로 {lastExecution.playerName ? `${lastExecution.playerName}님의 ` : ""}처형이 취소됐습니다!</p>
             : lastExecution.playerId
               ? <><p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>⚖️ 처형 결과</p>
                   <p style={{ fontSize: 16 }}><strong>{lastExecution.playerName}</strong>님이 처형됐습니다</p>
@@ -1455,6 +1469,16 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
                 {myConfirmVote === "yes" ? "✅ 찬성 투표 완료" : "❌ 반대 투표 완료"}
               </p>
             )}
+            {/* 수호 마녀 능력 (본인 화면에만 보임) */}
+            {myRole === "lawyer" && amAlive && !room.lawyerUsed && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+                <p style={{ color: "#9b59b6", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🧹 수호 마녀 능력 (1회, 나만 보여요)</p>
+                <Btn onClick={useLawyer} color="#9b59b6" style={{ marginBottom: 0 }}>🧹 마법으로 처형 막기</Btn>
+              </div>
+            )}
+            {myRole === "lawyer" && room.lawyerBlock && (
+              <p style={{ color: "#9b59b6", fontWeight: 700, fontSize: 13, marginTop: 12 }}>✅ 마법을 걸었습니다. 이번 처형은 취소됩니다.</p>
+            )}
             <p style={{ color: T.textMute, fontSize: 11, marginTop: 12 }}>사회자가 결과를 확정하면 처리됩니다</p>
           </div>
         </div>
@@ -1476,14 +1500,6 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       </div>
 
       <div>
-      {myRole === "lawyer" && phase === "vote" && amAlive && !room.lawyerUsed && (
-        <Card style={{ border: "1px solid #3a1a5c", background: "#0d0018" }}>
-          <p style={{ color: "#9b59b6", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚖️ 수호 마녀 능력 (1회)</p>
-          <Btn onClick={useLawyer} color="#9b59b6" disabled={lawyerUsed} style={{ marginBottom: 0 }}>
-            {lawyerUsed ? "✅ 이의 제기 완료" : "⚖️ 이의 있습니다!"}
-          </Btn>
-        </Card>
-      )}
 
       {/* 마피아 팀 패널 */}
       {amMafia && isNight && amAlive && (
@@ -1648,7 +1664,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
             const isNightSelected = myNightPick === id;
             // 의사는 자기 자신도 보호 가능, 나머지는 본인 선택 불가
             const canSelfTarget = myRole === "doctor";
-            const canClick = (!isMe || canSelfTarget) && amAlive && (
+            const blockedRepeat = isNight && id === myLastProtected;
+            const canClick = (!isMe || canSelfTarget) && amAlive && !blockedRepeat && (
               (phase === "vote" && !isMe && canVoteToday) ||
               (isNight && needsNightAction && !amMafia)
             );
@@ -1659,6 +1676,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
                 <span style={{ flex: 1, fontSize: 14, fontWeight: isMe ? 700 : 400 }}>{p.name}{isMe ? " (나)" : ""}</span>
                 {myVote && phase === "vote" && <span style={{ background: "#3a0000", color: "#e74c3c", borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 700 }}>✓ 투표함</span>}
                 {isNightSelected && <span style={{ background: "#1a3a1a", color: "#2ecc71", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>✓ 선택</span>}
+                {blockedRepeat && <span style={{ background: T.surface2, color: T.textMute, borderRadius: 20, padding: "2px 10px", fontSize: 11 }}>어젯밤 보호함 · 연속 불가</span>}
               </div>
             );
           })}
@@ -1679,7 +1697,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
         {isNight && amAlive && myRole === "reporter" && reporterAlreadyUsed && <p style={{ color: "#5c4a00", fontSize: 13 }}>🔮 이미 능력을 사용했습니다.</p>}
         {isNight && amAlive && needsNightAction && !myNightPick && (
           <p style={{ color: "#3498db", fontSize: 13 }}>
-            {myRole === "doctor" && "🧪 보호할 사람을 선택하세요."}
+            {myRole === "doctor" && `🧪 보호할 사람을 선택하세요.${myLastProtected ? " (어젯밤 보호한 사람은 연속으로 고를 수 없어요)" : ""}`}
             {myRole === "police" && "🔦 조사할 사람을 선택하세요."}
             {myRole === "reporter" && "🔮 공개할 사람을 선택하세요."}
           </p>

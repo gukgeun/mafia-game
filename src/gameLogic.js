@@ -6,9 +6,9 @@ export const ROLES_INFO = {
   mafia:     { name: "뱀파이어",      emoji: "🧛", color: "#ff7518", bg: "#1a0a00", border: "#6a2a00", team: "mafia",   desc: "밤마다 마을 사람 한 명을 습격하세요! 보름달이 뜨는 밤(3라운드마다)에는 두 명을 노릴 수 있습니다.", image: "/role-mafia.png" },
   mafiaBoss: { name: "뱀파이어 군주", emoji: "🦇", color: "#ff7518", bg: "#1a0a00", border: "#6a2a00", team: "mafia",   desc: "유령 사냥꾼의 조사에 마을 주민으로 위장됩니다! (은탄환은 피할 수 없어요)", image: "/role-mafiaboss.png" },
   police:    { name: "유령 사냥꾼",   emoji: "🔦", color: "#3498db", bg: "#00091a", border: "#1a3a5c", team: "citizen", desc: "매 밤 한 명을 조사해 뱀파이어인지 확인하세요. 단 한 번 은탄환을 쏠 수 있습니다. 뱀파이어면 그 자가 죽고, 아니면 당신이 죽습니다!", image: "/role-police.png" },
-  doctor:    { name: "연금술사",      emoji: "🧪", color: "#2ecc71", bg: "#001a0a", border: "#1a5c2a", team: "citizen", desc: "매 밤 한 명에게 물약을 주어 뱀파이어의 습격을 막으세요.", image: "/role-doctor.png" },
+  doctor:    { name: "연금술사",      emoji: "🧪", color: "#2ecc71", bg: "#001a0a", border: "#1a5c2a", team: "citizen", desc: "매 밤 한 명에게 물약을 주어 뱀파이어의 습격을 막으세요. 단, 어젯밤 보호한 사람은 연속으로 보호할 수 없습니다.", image: "/role-doctor.png" },
   reporter:  { name: "점술가",        emoji: "🔮", color: "#b48ade", bg: "#120a1a", border: "#4a2a6a", team: "citizen", desc: "단 한 번, 수정구로 한 명의 정체를 모두에게 공개할 수 있습니다.", image: "/role-reporter.png" },
-  lawyer:    { name: "수호 마녀",     emoji: "🧹", color: "#9b59b6", bg: "#0d001a", border: "#3a1a5c", team: "citizen", desc: "단 한 번, 처형 예정인 플레이어를 마법으로 구할 수 있습니다.", image: "/role-lawyer.png" },
+  lawyer:    { name: "수호 마녀",     emoji: "🧹", color: "#9b59b6", bg: "#0d001a", border: "#3a1a5c", team: "citizen", desc: "단 한 번, 처형 찬반 투표 중에 후보를 보고 마법으로 처형을 막을 수 있습니다.", image: "/role-lawyer.png" },
   citizen:   { name: "마을 주민",     emoji: "🧑‍🌾", color: "#95a5a6", bg: "#111",    border: "#2a2a2a", team: "citizen", desc: "뱀파이어를 찾아내어 처형하세요! 죽어도 유령이 되어 마을을 도울 수 있습니다.", image: "/role-citizen.png" },
   terrorist: { name: "폭탄 허수아비", emoji: "🧨", color: "#e67e22", bg: "#1a0d00", border: "#5c3300", team: "citizen", desc: "처형당하면 미리 정해둔 대상과 함께 사망합니다!", image: "/role-terrorist.png" },
   priest:    { name: "퇴마사",        emoji: "✝️", color: "#ecf0f1", bg: "#0a0a0a", border: "#4a4a4a", team: "citizen", desc: "단 한 번, 죽은 사람을 부활시킬 수 있습니다.", image: "/role-priest.png" },
@@ -133,12 +133,22 @@ export function resolveNight({ playersMap, nightActions, round, mafiaTarget, maf
   const silverActions = nightActions.silver || {};
   const ghostActions = nightActions.ghost || {};
 
-  const protectedSet = new Set(Object.values(doctorActions).filter(Boolean));
+  // 연금술사는 직전 밤에 보호한 사람을 연속으로 보호할 수 없다 (화면에서도 막지만 여기서 한 번 더 확인)
+  const protectedSet = new Set(
+    Object.entries(doctorActions)
+      .filter(([docId, t]) => t && t !== playersMap[docId]?.lastProtected)
+      .map(([, t]) => t)
+  );
   const framedSet = new Set(Object.values(framerActions).filter(Boolean));
 
   const updates = {};
   const logEntries = [];
   const deaths = [];
+
+  // 오늘 밤 보호한 사람을 기록한다 (보호를 건너뛴 밤이면 기록이 지워져 다음 밤엔 누구나 보호 가능)
+  Object.entries(playersMap).forEach(([id, p]) => {
+    if (p.role === "doctor") updates[`players/${id}/lastProtected`] = doctorActions[id] || null;
+  });
   const deadSet = new Set();
   let killed = null;
   const revivedIds = [];

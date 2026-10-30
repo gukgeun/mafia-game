@@ -372,3 +372,27 @@ describe("할로윈 - 투표 가중치 (유령 / 트릭 오어 트릿)", () => {
     expect(r).toEqual({ round: 4, playerId: "b", playerName: "B", type: "trick" });
   });
 });
+
+describe("할로윈 - 연금술사 연속 보호 금지", () => {
+  test("어젯밤 보호한 사람을 또 고르면 보호가 적용되지 않아야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.d1.lastProtected = "c1";
+    const { killed } = resolveNight({ playersMap, nightActions: { doctor: { d1: "c1" } }, round: 2, mafiaTargets: ["c1"] });
+    expect(killed).toBe("c1");
+  });
+
+  test("오늘 밤 보호한 사람이 기록되고, 보호를 건너뛰면 기록이 지워져야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.d2.lastProtected = "c2";
+    const { updates } = resolveNight({ playersMap, nightActions: { doctor: { d1: "c1" } }, round: 2, mafiaTargets: [] });
+    expect(updates["players/d1/lastProtected"]).toBe("c1");
+    expect(updates["players/d2/lastProtected"]).toBeNull();
+  });
+
+  test("다른 사람을 보호하면 정상적으로 막아야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.d1.lastProtected = "c1";
+    const { killed } = resolveNight({ playersMap, nightActions: { doctor: { d1: "c2" } }, round: 2, mafiaTargets: ["c2"] });
+    expect(killed).toBeNull();
+  });
+});
