@@ -135,8 +135,154 @@ const PlayerTag = ({ name, isMe, isDead, isHost, extra, onClick, selected, dimme
   </div>
 );
 
+// ── 게임 방법 (할로윈 버전) ──
+// 역할 목록은 ROLES_INFO에서 그대로 가져오므로 역할 설명을 바꾸면 여기도 함께 바뀐다.
+const HOWTO_TEAMS = [
+  { label: "🏘️ 마을팀", color: T.green, roles: ["citizen", "police", "doctor", "reporter", "lawyer", "priest", "terrorist"] },
+  { label: "🧛 뱀파이어팀", color: T.redGlow, roles: ["mafia", "mafiaBoss", "framer", "bomber"] },
+  { label: "🎃 솔로", color: "#e84393", roles: ["jester"] },
+];
+
+const HowToSection = ({ title, children }) => (
+  <div style={{ marginBottom: 28 }}>
+    <h3 style={{ color: T.redGlow, fontSize: 17, fontWeight: 900, margin: "0 0 12px", letterSpacing: 1 }}>{title}</h3>
+    {children}
+  </div>
+);
+
+const HowToStep = ({ icon, title, children }) => (
+  <div style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "flex-start" }}>
+    <span style={{ fontSize: 22, width: 30, flexShrink: 0, textAlign: "center" }}>{icon}</span>
+    <div style={{ flex: 1 }}>
+      <p style={{ color: T.text, fontSize: 14, fontWeight: 700, margin: "2px 0 4px" }}>{title}</p>
+      <p style={{ color: T.textDim, fontSize: 13, lineHeight: 1.7, margin: 0 }}>{children}</p>
+    </div>
+  </div>
+);
+
+function HowToPlay({ onClose }) {
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 10000, background: "rgba(5,3,10,0.88)",
+      display: "flex", justifyContent: "center", padding: "24px 16px", overflowY: "auto",
+      fontFamily: "'Noto Sans KR', sans-serif",
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width: "100%", maxWidth: 760, height: "fit-content", background: T.surface,
+        border: `1px solid ${T.border2}`, borderRadius: 16, boxShadow: `0 0 60px ${T.red}33`,
+        position: "relative",
+      }}>
+        {/* 상단 바 (스크롤해도 닫기 버튼이 보이도록 고정) */}
+        <div style={{
+          position: "sticky", top: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "16px 22px", background: T.surface, borderBottom: `1px solid ${T.border}`, borderRadius: "16px 16px 0 0",
+        }}>
+          <h2 style={{ color: T.text, fontSize: 20, fontWeight: 900, margin: 0 }}>📖 마피아 할로윈 게임 방법</h2>
+          <button type="button" onClick={onClose} style={{
+            background: T.surface2, border: `1px solid ${T.border2}`, color: T.text, borderRadius: 8,
+            padding: "8px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif",
+          }}>닫기 ✕</button>
+        </div>
+
+        <div style={{ padding: "22px 22px 8px" }}>
+          <HowToSection title="🎃 이야기">
+            <p style={{ color: T.textDim, fontSize: 14, lineHeight: 1.8, margin: 0 }}>
+              할로윈 밤, 작은 마을에 <strong style={{ color: T.redGlow }}>뱀파이어</strong>들이 사람인 척 숨어들었습니다.
+              마을 사람들은 낮마다 토론과 투표로 뱀파이어를 찾아내 처형하고, 뱀파이어들은 밤마다 몰래 마을 사람을 습격합니다.
+              그 사이 <strong style={{ color: "#e84393" }}>잭오랜턴</strong>은 일부러 의심을 사서 처형당하려고 합니다.
+            </p>
+          </HowToSection>
+
+          <HowToSection title="🎮 시작하기">
+            <HowToStep icon="🎙️" title="사회자가 방 만들기">
+              사회자 한 명은 게임에 참여하지 않고 진행만 맡습니다. 인원수를 정하면 역할 구성이 추천값으로 자동 조정되고, 원하면 직접 바꿀 수 있습니다. 방을 만들면 4글자 방 코드가 나옵니다.
+            </HowToStep>
+            <HowToStep icon="🚪" title="플레이어 입장">
+              플레이어는 닉네임과 방 코드를 입력해 들어옵니다. 인원이 다 차면 사회자가 게임을 시작합니다.
+            </HowToStep>
+            <HowToStep icon="🃏" title="역할 확인">
+              카드를 눌러 내 역할을 확인하세요. <strong>다른 사람에게 보여주면 안 됩니다!</strong> 뱀파이어팀은 밤마다 서로가 누구인지 볼 수 있습니다.
+            </HowToStep>
+          </HowToSection>
+
+          <HowToSection title="🔄 하루의 흐름">
+            <HowToStep icon="☀️" title="1. 낮: 토론">
+              어젯밤 무슨 일이 있었는지 확인하고 자유롭게 이야기하며 뱀파이어를 추리합니다.
+            </HowToStep>
+            <HowToStep icon="⚖️" title="2. 지목 투표">
+              사회자가 투표를 시작하면 처형할 사람을 한 명씩 고릅니다. 가장 많은 표를 받은 사람이 처형 후보가 되며, 동률이면 아무도 처형되지 않습니다.
+            </HowToStep>
+            <HowToStep icon="🔨" title="3. 처형 찬반 투표">
+              후보를 정말 처형할지 찬성/반대로 투표합니다. 살아있는 인원의 과반이 찬성해야 처형됩니다. 처형된 사람의 정체는 "뱀파이어" 또는 "마을 주민"으로만 공개됩니다.
+            </HowToStep>
+            <HowToStep icon="🌙" title="4. 밤: 능력 사용">
+              모두 고개를 숙이고, 능력이 있는 사람만 화면에서 몰래 대상을 고릅니다. 사회자가 밤을 끝내면 결과와 함께 다음 날 아침이 밝습니다.
+            </HowToStep>
+          </HowToSection>
+
+          <HowToSection title="🦇 할로윈 특별 규칙">
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 10 }}>
+              {[
+                { icon: "👻", title: "유령의 속삭임", text: "죽은 사람은 유령이 되어 밤마다 산 사람 한 명을 지목합니다. 유령들에게 가장 많이 지목된 사람은 다음 날 투표(지목·찬반 모두)를 할 수 없습니다. 죽어도 계속 팀을 도울 수 있어요!" },
+                { icon: "🔫", title: "은탄환", text: "유령 사냥꾼은 게임 중 딱 한 번 은탄환을 쏠 수 있습니다. 뱀파이어팀을 쏘면 그 자가 쓰러지고, 사람을 쏘면 사냥꾼 자신이 저주받아 죽습니다. 연금술사의 물약으로도 막을 수 없습니다." },
+                { icon: "🍬", title: "트릭 오어 트릿", text: "매일 낮이 시작될 때 산 사람 중 한 명이 무작위로 뽑힙니다. 사탕이면 그날 표가 2표로 계산되고, 장난이면 그날 투표를 할 수 없습니다." },
+                { icon: "🌕", title: "보름달", text: "3, 6, 9… 라운드의 밤에는 보름달이 떠서 뱀파이어가 두 명을 습격할 수 있습니다. 그날 낮부터 모두에게 예고되니 미리 대비하세요!" },
+              ].map(r => (
+                <div key={r.title} style={{ background: T.surface2, border: `1px solid ${T.border2}`, borderLeft: `3px solid ${T.redGlow}`, borderRadius: 10, padding: "12px 14px" }}>
+                  <p style={{ color: T.text, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>{r.icon} {r.title}</p>
+                  <p style={{ color: T.textDim, fontSize: 13, lineHeight: 1.7, margin: 0 }}>{r.text}</p>
+                </div>
+              ))}
+            </div>
+          </HowToSection>
+
+          <HowToSection title="🃏 역할 소개">
+            {HOWTO_TEAMS.map(team => (
+              <div key={team.label} style={{ marginBottom: 16 }}>
+                <p style={{ color: team.color, fontSize: 13, fontWeight: 900, letterSpacing: 1, margin: "0 0 8px" }}>{team.label}</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 8 }}>
+                  {team.roles.map(id => {
+                    const ri = ROLES_INFO[id];
+                    return (
+                      <div key={id} style={{ display: "flex", gap: 12, alignItems: "flex-start", background: T.surface2, border: `1px solid ${ri.border}`, borderRadius: 10, padding: "10px 12px" }}>
+                        {ri.image
+                          ? <img src={ri.image} alt={ri.name} style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: `2px solid ${ri.border}`, flexShrink: 0 }} />
+                          : <span style={{ fontSize: 32, width: 52, textAlign: "center", flexShrink: 0 }}>{ri.emoji}</span>}
+                        <div style={{ flex: 1 }}>
+                          <p style={{ color: ri.color, fontSize: 14, fontWeight: 700, margin: "2px 0 4px" }}>{ri.emoji} {ri.name}</p>
+                          <p style={{ color: T.textDim, fontSize: 12, lineHeight: 1.6, margin: 0 }}>{ri.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </HowToSection>
+
+          <HowToSection title="🏆 승리 조건">
+            <HowToStep icon="🏘️" title="마을팀 승리">뱀파이어팀을 모두 처치하면 승리합니다.</HowToStep>
+            <HowToStep icon="🧛" title="뱀파이어팀 승리">살아있는 뱀파이어팀 수가 마을팀 수(잭오랜턴 제외)와 같아지거나 많아지면 승리합니다.</HowToStep>
+            <HowToStep icon="🎃" title="잭오랜턴 승리">투표로 처형당하면 그 즉시 혼자 승리합니다.</HowToStep>
+          </HowToSection>
+
+          <HowToSection title="💡 알아두면 좋은 점">
+            <ul style={{ color: T.textDim, fontSize: 13, lineHeight: 1.9, margin: 0, paddingLeft: 20 }}>
+              <li>화면을 새로고침해도 진행 중인 게임으로 다시 돌아옵니다.</li>
+              <li>게임 중 왼쪽 위 <strong>🏠 처음으로</strong> 버튼으로 게임에서 나올 수 있습니다.</li>
+              <li>사회자 화면에서는 모든 역할과 밤 행동이 보이고, 필요하면 직접 사망/부활 처리를 할 수 있습니다.</li>
+              <li>밤에는 다른 사람 화면을 엿보지 않기! 낮의 거짓말과 추리가 이 게임의 재미입니다.</li>
+            </ul>
+          </HowToSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 타이틀 ──
 function TitleScreen({ onHost, onJoin }) {
+  const [showHowTo, setShowHowTo] = useState(false);
   return (
     <div style={{
       minHeight: "100vh",
@@ -159,7 +305,11 @@ function TitleScreen({ onHost, onJoin }) {
         <Btn onClick={onJoin} color={T.blue} outline style={{ padding: "16px", fontSize: 15, letterSpacing: 1 }}>
           🚪 플레이어로 참가하기
         </Btn>
+        <Btn onClick={() => setShowHowTo(true)} color={T.gold} outline style={{ padding: "12px", fontSize: 14, letterSpacing: 1, background: "rgba(0,0,0,0.45)" }}>
+          📖 게임 방법
+        </Btn>
       </div>
+      {showHowTo && <HowToPlay onClose={() => setShowHowTo(false)} />}
     </div>
   );
 }
