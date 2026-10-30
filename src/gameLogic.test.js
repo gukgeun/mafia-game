@@ -1,4 +1,4 @@
-import { checkWin, resolveNight, resolveConfirm, recommendedRoles } from "./gameLogic";
+import { checkWin, resolveNight, resolveConfirm, recommendedRoles, voteWeight, tallyVotes, countConfirm, pickMafiaTargets, isFullMoon, rollTrickOrTreat } from "./gameLogic";
 
 function basePlayers() {
   return {
@@ -55,9 +55,9 @@ describe("resolveNight - 경찰 다중 배치 + 모함가", () => {
       police: { p1: "m1", p2: "c1" },
     };
     const { updates } = resolveNight({ playersMap, nightActions, round: 1, mafiaTarget: null });
-    expect(updates["policeResults/p1"].result).toBe("마피아");
+    expect(updates["policeResults/p1"].result).toBe("뱀파이어");
     expect(updates["policeResults/p1"].targetName).toBe("마피아1");
-    expect(updates["policeResults/p2"].result).toBe("시민");
+    expect(updates["policeResults/p2"].result).toBe("사람");
     expect(updates["policeResults/p2"].targetName).toBe("시민1");
   });
 
@@ -69,8 +69,8 @@ describe("resolveNight - 경찰 다중 배치 + 모함가", () => {
       framer: { f1: "c1" }, // c1에게 누명
     };
     const { updates } = resolveNight({ playersMap, nightActions, round: 1, mafiaTarget: null });
-    expect(updates["policeResults/p1"].result).toBe("마피아"); // c1 조사 -> 누명으로 마피아
-    expect(updates["policeResults/p2"].result).toBe("시민"); // c2는 정상 결과
+    expect(updates["policeResults/p1"].result).toBe("뱀파이어"); // c1 조사 -> 누명으로 마피아
+    expect(updates["policeResults/p2"].result).toBe("사람"); // c2는 정상 결과
   });
 
   test("경찰 1명이어도 모함가 효과가 실제로 반영돼야 한다 (기존 버그: 즉시-클라이언트 계산이라 반영 안 됐음)", () => {
@@ -81,7 +81,7 @@ describe("resolveNight - 경찰 다중 배치 + 모함가", () => {
       framer: { f1: "c1" },
     };
     const { updates } = resolveNight({ playersMap, nightActions, round: 1, mafiaTarget: null });
-    expect(updates["policeResults/p1"].result).toBe("마피아");
+    expect(updates["policeResults/p1"].result).toBe("뱀파이어");
   });
 });
 
@@ -94,11 +94,11 @@ describe("resolveNight - 기자/성직자 다중 배치", () => {
       reporter: { r1: "m1", r2: "c1" },
     };
     const { updates, logEntries } = resolveNight({ playersMap, nightActions, round: 1, mafiaTarget: null });
-    expect(updates["reporterReveals/r1"].result).toBe("마피아");
-    expect(updates["reporterReveals/r2"].result).toBe("시민");
+    expect(updates["reporterReveals/r1"].result).toBe("뱀파이어");
+    expect(updates["reporterReveals/r2"].result).toBe("마을 주민");
     expect(updates["players/r1/reporterUsed"]).toBe(true);
     expect(updates["players/r2/reporterUsed"]).toBe(true);
-    expect(logEntries.filter(e => e.includes("기자가")).length).toBe(2);
+    expect(logEntries.filter(e => e.includes("점술가가")).length).toBe(2);
   });
 
   test("성직자 2명이 각자 다른 사망자를 부활시키면 둘 다 반영돼야 한다", () => {
@@ -274,5 +274,101 @@ describe("recommendedRoles - 인원수별 자동 밸런스", () => {
       const citizenPowerTotal = roles.police + roles.doctor + roles.reporter + roles.lawyer + roles.terrorist + roles.priest;
       expect(citizenPowerTotal).toBeLessThanOrEqual(mafiaTeamTotal(roles) + n * 0.1 + 4);
     });
+  });
+});
+
+describe("할로윈 - 은탄환", () => {
+  test("뱀파이어를 쏘면 대상이 죽고 사냥꾼은 살아야 한다 (물약으로도 막을 수 없음)", () => {
+    const playersMap = basePlayers();
+    const { updates, deaths } = resolveNight({ playersMap, nightActions: { silver: { p1: "m1" }, doctor: { d1: "m1" } }, round: 1, mafiaTargets: [] });
+    expect(updates["players/m1/alive"]).toBe(false);
+    expect(updates["players/p1/alive"]).toBeUndefined();
+    expect(updates["players/p1/silverUsed"]).toBe(true);
+    expect(deaths).toEqual([{ playerId: "m1", cause: "silver" }]);
+  });
+
+  test("사람을 쏘면 사냥꾼 본인이 죽어야 한다", () => {
+    const playersMap = basePlayers();
+    const { updates, deaths } = resolveNight({ playersMap, nightActions: { silver: { p1: "c1" } }, round: 1, mafiaTargets: [] });
+    expect(updates["players/c1/alive"]).toBeUndefined();
+    expect(updates["players/p1/alive"]).toBe(false);
+    expect(deaths).toEqual([{ playerId: "p1", cause: "misfire" }]);
+  });
+
+  test("습격과 오발로 같은 사람이 죽어도 사망자 목록에는 한 번만 들어가야 한다", () => {
+    const playersMap = basePlayers();
+    const { deaths } = resolveNight({ playersMap, nightActions: { silver: { p1: "c1" } }, round: 1, mafiaTargets: ["p1"] });
+    expect(deaths.map(d => d.playerId)).toEqual(["p1"]);
+  });
+});
+
+describe("할로윈 - 보름달", () => {
+  test("3라운드마다 보름달이어야 한다", () => {
+    expect([1, 2, 3, 4, 5, 6].map(isFullMoon)).toEqual([false, false, true, false, false, true]);
+  });
+
+  test("보름달 밤엔 두 번째 표까지 집계해 두 명을 고르고, 평소엔 한 명만 골라야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.m1.mafiaVote = "c1";
+    playersMap.m1.mafiaVote2 = "c2";
+    expect(pickMafiaTargets(playersMap, true).sort()).toEqual(["c1", "c2"]);
+    expect(pickMafiaTargets(playersMap, false)).toEqual(["c1"]);
+  });
+
+  test("두 명 습격 시 보호받지 못한 사람만 죽어야 한다", () => {
+    const playersMap = basePlayers();
+    const { deaths } = resolveNight({ playersMap, nightActions: { doctor: { d1: "c1" } }, round: 3, mafiaTargets: ["c1", "c2"] });
+    expect(deaths.map(d => d.playerId)).toEqual(["c2"]);
+  });
+});
+
+describe("할로윈 - 유령", () => {
+  test("죽은 사람들이 가장 많이 지목한 산 사람이 다음 낮에 오싹해져야 한다", () => {
+    const playersMap = basePlayers();
+    playersMap.g1 = { name: "유령1", role: "citizen", alive: false };
+    playersMap.g2 = { name: "유령2", role: "mafia", alive: false };
+    playersMap.g3 = { name: "유령3", role: "citizen", alive: false };
+    const { updates } = resolveNight({ playersMap, nightActions: { ghost: { g1: "c1", g2: "c2", g3: "c1" } }, round: 2, mafiaTargets: [] });
+    expect(updates.spooked).toEqual({ round: 3, playerId: "c1", playerName: "시민1" });
+  });
+
+  test("산 사람이 보낸 유령 행동은 무시돼야 한다", () => {
+    const playersMap = basePlayers();
+    const { updates } = resolveNight({ playersMap, nightActions: { ghost: { c2: "c1" } }, round: 2, mafiaTargets: [] });
+    expect(updates.spooked).toBeNull();
+  });
+});
+
+describe("할로윈 - 투표 가중치 (유령 / 트릭 오어 트릿)", () => {
+  const ctx = {
+    round: 2,
+    spooked: { round: 2, playerId: "c1" },
+    trickOrTreat: { round: 2, playerId: "c2", type: "treat" },
+  };
+
+  test("오싹해진 사람은 0표, 사탕 받은 사람은 2표, 나머지는 1표여야 한다", () => {
+    expect(voteWeight("c1", ctx)).toBe(0);
+    expect(voteWeight("c2", ctx)).toBe(2);
+    expect(voteWeight("d1", ctx)).toBe(1);
+  });
+
+  test("효과는 해당 라운드에만 적용돼야 한다", () => {
+    expect(voteWeight("c1", { ...ctx, round: 3 })).toBe(1);
+    expect(voteWeight("c2", { ...ctx, round: 3 })).toBe(1);
+  });
+
+  test("장난에 걸린 사람은 0표여야 한다", () => {
+    expect(voteWeight("c2", { ...ctx, trickOrTreat: { round: 2, playerId: "c2", type: "trick" } })).toBe(0);
+  });
+
+  test("지목 투표와 확인 투표 집계에 가중치가 반영돼야 한다", () => {
+    expect(tallyVotes({ c1: "m1", c2: "m1", d1: "c2" }, ctx)).toEqual({ m1: 2, c2: 1 });
+    expect(countConfirm({ c1: "yes", c2: "yes", d1: "no" }, ctx)).toEqual({ yes: 2, no: 1 });
+  });
+
+  test("트릭 오어 트릿은 살아있는 사람 중에서만 뽑혀야 한다", () => {
+    const playersMap = { a: { name: "A", alive: false }, b: { name: "B", alive: true } };
+    const r = rollTrickOrTreat({ playersMap, round: 4, rand: () => 0.9 });
+    expect(r).toEqual({ round: 4, playerId: "b", playerName: "B", type: "trick" });
   });
 });

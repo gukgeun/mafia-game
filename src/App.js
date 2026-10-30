@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, update } from "firebase/database";
-import { ROLES_INFO, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm, recommendedRoles } from "./gameLogic";
+import { ROLES_INFO, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm, recommendedRoles, isFullMoon, voteWeight, tallyVotes, countConfirm, pickMafiaTargets, rollTrickOrTreat } from "./gameLogic";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvV_N8Ndp5jZFG56XNlxpypOktRBIZpOc",
@@ -19,14 +19,15 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 // ── 디자인 토큰 ──
+// 할로윈 테마: 호박 주황 + 보랏빛 어둠
 const T = {
-  bg:       "#08080a",
-  surface:  "#0f0f12",
-  surface2: "#16161b",
-  border:   "#1e1e26",
-  border2:  "#2a2a36",
-  red:      "#c0392b",
-  redGlow:  "#e74c3c",
+  bg:       "#0a0710",
+  surface:  "#110c17",
+  surface2: "#18121f",
+  border:   "#231a2e",
+  border2:  "#2f2440",
+  red:      "#d35400",
+  redGlow:  "#ff7518",
   gold:     "#c9a84c",
   goldDim:  "#7a6530",
   blue:     "#2980b9",
@@ -80,8 +81,8 @@ const PageWrap = ({ children, night = false, wide = false }) => (
   <div style={{
     minHeight: "100vh",
     background: night
-      ? `linear-gradient(160deg, #04040c 0%, #080810 50%, ${T.bg} 100%)`
-      : `linear-gradient(160deg, #0c0404 0%, #0a0808 50%, ${T.bg} 100%)`,
+      ? `linear-gradient(160deg, #05030f 0%, #0b0618 50%, ${T.bg} 100%)`
+      : `linear-gradient(160deg, #140802 0%, #0d0606 50%, ${T.bg} 100%)`,
     color: T.text, fontFamily: "'Noto Sans KR', sans-serif",
     display: "flex", flexDirection: "column", alignItems: "center",
     padding: "24px 16px 48px", transition: "background 1.2s ease",
@@ -125,7 +126,7 @@ const PlayerTag = ({ name, isMe, isDead, isHost, extra, onClick, selected, dimme
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: 14,
     }}>
-      {isDead ? "💀" : isHost ? "👑" : "👤"}
+      {isDead ? "👻" : isHost ? "👑" : "👤"}
     </div>
     <span style={{ flex: 1, fontSize: 14, fontWeight: isMe ? 700 : 400, color: isDead ? T.textMute : T.text, textDecoration: isDead ? "line-through" : "none" }}>
       {name}{isMe ? " (나)" : ""}
@@ -173,6 +174,30 @@ const BackButton = ({ onClick }) => (
     ← 뒤로가기
   </button>
 );
+
+// 오늘 낮 할로윈 이벤트 안내 (트릭 오어 트릿 / 유령의 속삭임 / 보름달 예고)
+const DayEffects = ({ room, round, phase, wide = false }) => {
+  if (phase === "night") return null;
+  const tot = room.trickOrTreat?.round === round ? room.trickOrTreat : null;
+  const spooked = room.spooked?.round === round ? room.spooked : null;
+  const fullMoon = isFullMoon(round);
+  if (!tot && !spooked && !fullMoon) return null;
+  const line = { fontSize: 14, color: T.text, marginBottom: 6, lineHeight: 1.6 };
+  return (
+    <Card accent={T.redGlow} style={{ background: "#140a02", ...(wide ? { maxWidth: "100%" } : {}) }}>
+      <Label color={T.redGlow}>🎃 오늘의 할로윈 이벤트</Label>
+      {tot && (
+        <p style={line}>
+          {tot.type === "treat"
+            ? <>🍬 <strong>사탕!</strong> {tot.playerName}님의 표는 오늘 <strong>2표</strong>로 계산됩니다</>
+            : <>🕸️ <strong>장난!</strong> {tot.playerName}님은 오늘 <strong>투표할 수 없습니다</strong></>}
+        </p>
+      )}
+      {spooked && <p style={line}>👻 유령의 속삭임에 오싹해진 {spooked.playerName}님은 오늘 <strong>투표할 수 없습니다</strong></p>}
+      {fullMoon && <p style={{ ...line, color: "#f5d76e" }}>🌕 오늘 밤은 보름달! 뱀파이어가 <strong>두 명</strong>을 노립니다</p>}
+    </Card>
+  );
+};
 
 // 게임 중 처음으로 돌아가기 버튼 (확인 팝업 포함)
 const ExitGameButton = ({ onExit, isHost }) => {
@@ -247,19 +272,12 @@ function HostScreen({ onCreated, onBack }) {
     onCreated(code, hostId);
   };
 
+  // 역할 이름/이모지는 ROLES_INFO(할로윈 테마)에서 가져온다
   const roleRows = [
-    { id: "mafia", label: "마피아", emoji: "🔫", color: T.red },
-    { id: "mafiaBoss", label: "마피아 보스", emoji: "👑", color: T.red },
-    { id: "police", label: "경찰", emoji: "🚔", color: T.blue },
-    { id: "doctor", label: "의사", emoji: "⚕️", color: T.green },
-    { id: "reporter", label: "기자", emoji: "📰", color: T.yellow },
-    { id: "lawyer", label: "변호사", emoji: "⚖️", color: T.purple },
-    { id: "terrorist", label: "테러리스트", emoji: "🧨", color: "#e67e22" },
-    { id: "priest", label: "성직자", emoji: "✝️", color: "#ecf0f1" },
-    { id: "jester", label: "광대", emoji: "🤡", color: "#e84393" },
-    { id: "framer", label: "모함가", emoji: "🎭", color: T.red },
-    { id: "bomber", label: "폭탄마", emoji: "💣", color: T.red },
-  ];
+    ["mafia", T.red], ["mafiaBoss", T.red], ["police", T.blue], ["doctor", T.green],
+    ["reporter", "#b48ade"], ["lawyer", T.purple], ["terrorist", "#e67e22"], ["priest", "#ecf0f1"],
+    ["jester", "#e84393"], ["framer", T.red], ["bomber", T.red],
+  ].map(([id, color]) => ({ id, label: ROLES_INFO[id].name, emoji: ROLES_INFO[id].emoji, color }));
 
   return (
     <PageWrap>
@@ -298,7 +316,7 @@ function HostScreen({ onCreated, onBack }) {
             </div>
           ))}
           <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ color: T.textMute, fontSize: 12 }}>👤 시민 (자동)</span>
+            <span style={{ color: T.textMute, fontSize: 12 }}>{ROLES_INFO.citizen.emoji} {ROLES_INFO.citizen.name} (자동)</span>
             <span style={{ fontWeight: 700, color: citizenCount < 0 ? T.red : T.green, fontSize: 14 }}>
               {citizenCount < 0 ? "⚠ 초과" : `${citizenCount}명`}
             </span>
@@ -380,6 +398,9 @@ function HostLobbyScreen({ code, onStart }) {
       updates[`rooms/${code}/players/${pid}/role`] = room.roleList[idx] || "citizen";
     });
     updates[`rooms/${code}/status`] = "playing";
+    // 🍬 첫날 트릭 오어 트릿
+    const startPlayers = Object.fromEntries(entries.map(([pid, p]) => [pid, { ...p, alive: true }]));
+    updates[`rooms/${code}/trickOrTreat`] = rollTrickOrTreat({ playersMap: startPlayers, round: 1 });
     await update(ref(db), updates);
     onStart();
   };
@@ -506,7 +527,7 @@ function RoleRevealScreen({ code, playerId, onReady }) {
           <p style={{ color: T.textDim, fontSize: 12, textAlign: "center", lineHeight: 1.7, maxWidth: 260 }}>{ri.desc}</p>
           <div style={{ marginTop: 12, padding: "3px 14px", borderRadius: 20, background: ri.team === "mafia" ? "#2a000066" : ri.team === "jester" ? "#2a001a66" : "#00200066", border: `1px solid ${ri.team === "mafia" ? T.red + "44" : ri.team === "jester" ? "#e8439344" : T.green + "44"}` }}>
             <span style={{ fontSize: 10, color: ri.team === "mafia" ? T.red : ri.team === "jester" ? "#e84393" : T.green, letterSpacing: 2, fontWeight: 700 }}>
-              {ri.team === "mafia" ? "MAFIA" : ri.team === "jester" ? "SOLO" : "CITIZEN"}
+              {ri.team === "mafia" ? "VAMPIRE" : ri.team === "jester" ? "SOLO" : "VILLAGE"}
             </span>
           </div>
         </div>
@@ -545,21 +566,17 @@ function HostGameScreen({ code, onEnd, onExit }) {
   const nightActions = room.nightActions || {};
 
   // 마피아 투표 현황
+  const fullMoon = isFullMoon(round);
   const aliveMafiaEntries = playerEntries.filter(([, p]) => isMafia(p.role) && p.alive);
-  const mafiaVoteCounts = {};
-  aliveMafiaEntries.forEach(([, p]) => {
-    if (p.mafiaVote) mafiaVoteCounts[p.mafiaVote] = (mafiaVoteCounts[p.mafiaVote] || 0) + 1;
-  });
-  const topMafiaTargetArr = Object.entries(mafiaVoteCounts).sort((a, b) => b[1] - a[1]);
-  const topMafiaTarget = topMafiaTargetArr[0]?.[0] || null;
+  const mafiaTargets = pickMafiaTargets(playersMap, fullMoon);
 
-  // 투표 집계
-  const voteCounts = {};
-  Object.values(votes).forEach(v => { if (v) voteCounts[v] = (voteCounts[v] || 0) + 1; });
+  // 투표 집계 (유령의 속삭임 / 트릭 오어 트릿 가중치 반영)
+  const voteCtx = { round, spooked: room.spooked, trickOrTreat: room.trickOrTreat };
+  const voteCounts = tallyVotes(votes, voteCtx);
 
   const processNight = async () => {
-    const mafiaTarget = topMafiaTarget || null;
-    const { updates: resolved, logEntries, killed, revivedIds } = resolveNight({ playersMap, nightActions, round, mafiaTarget });
+    const { updates: resolved, logEntries, deaths, revivedIds } = resolveNight({ playersMap, nightActions, round, mafiaTargets });
+    if (fullMoon) logEntries.unshift("🌕 보름달이 뜬 밤이었습니다");
 
     const updates = {};
     Object.entries(resolved).forEach(([k, v]) => { updates[`rooms/${code}/${k}`] = v; });
@@ -571,19 +588,23 @@ function HostGameScreen({ code, onEnd, onExit }) {
     // 마피아 개인 투표 초기화
     aliveMafiaEntries.forEach(([id]) => {
       updates[`rooms/${code}/players/${id}/mafiaVote`] = null;
+      updates[`rooms/${code}/players/${id}/mafiaVote2`] = null;
     });
-    updates[`rooms/${code}/lastDeath`] = killed
-      ? { round, playerId: killed, playerName: playersMap[killed]?.name, role: playersMap[killed]?.role }
-      : { round, playerId: null };
+    updates[`rooms/${code}/lastDeath`] = {
+      round,
+      deaths: deaths.map(d => ({ ...d, playerName: playersMap[d.playerId]?.name, role: playersMap[d.playerId]?.role })),
+    };
     updates[`rooms/${code}/phase`] = "day";
     updates[`rooms/${code}/round`] = round + 1;
     updates[`rooms/${code}/nightActions`] = null;
 
     const updatedPlayers = { ...playersMap };
-    if (killed) updatedPlayers[killed] = { ...updatedPlayers[killed], alive: false };
     revivedIds.forEach(id => { updatedPlayers[id] = { ...updatedPlayers[id], alive: true }; });
+    deaths.forEach(({ playerId }) => { updatedPlayers[playerId] = { ...updatedPlayers[playerId], alive: false }; });
     const win = checkWin(updatedPlayers);
     if (win) { updates[`rooms/${code}/winner`] = win; onEnd(win); }
+    // 🍬 다음 낮의 트릭 오어 트릿
+    updates[`rooms/${code}/trickOrTreat`] = rollTrickOrTreat({ playersMap: updatedPlayers, round: round + 1 });
 
     await update(ref(db), updates);
   };
@@ -593,7 +614,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
     const logEntries = [];
 
     if (room.lawyerBlock) {
-      logEntries.push(`⚖️ 변호사가 이의를 제기해 처형이 취소됐습니다`);
+      logEntries.push(`⚖️ 수호 마녀가 이의를 제기해 처형이 취소됐습니다`);
       updates[`rooms/${code}/logs/r${String(round).padStart(3, "0")}_a_낮${round}`] = { phase: `낮 ${round}라운드`, entries: logEntries, order: round * 10 };
       await update(ref(db), { ...updates, [`rooms/${code}/phase`]: "night", [`rooms/${code}/votes`]: null, [`rooms/${code}/lawyerBlock`]: null, [`rooms/${code}/lastExecution`]: { round, playerId: null, blocked: true } });
       return;
@@ -629,8 +650,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
   const processConfirm = async () => {
     const confirmVotes = room.confirmVotes || {};
     const executed = room.confirmTarget;
-    const yesCount = Object.values(confirmVotes).filter(v => v === "yes").length;
-    const noCount = Object.values(confirmVotes).filter(v => v === "no").length;
+    const { yes: yesCount, no: noCount } = countConfirm(confirmVotes, voteCtx);
     const aliveCnt = Object.values(playersMap).filter(p => p.alive).length;
     const majority = Math.floor(aliveCnt / 2) + 1;
 
@@ -680,6 +700,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <PhaseBadge phase={phase} round={round} />
           <span style={{ color: T.red, fontSize: 10, fontWeight: 700, letterSpacing: 2 }}>🎙️ 사회자</span>
+          {fullMoon && <span style={{ color: "#f5d76e", fontSize: 11, fontWeight: 700 }}>🌕 {isNight ? "보름달 밤 (2명 습격)" : "오늘 밤 보름달"}</span>}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {phase === "day" && (
@@ -715,6 +736,8 @@ function HostGameScreen({ code, onEnd, onExit }) {
         </div>
       </div>
 
+      <DayEffects room={room} round={round} phase={phase} wide />
+
       {/* 전체 플레이어 현황 - 사회자는 역할 다 보임 */}
       <Card style={{ maxWidth: "100%" }}>
         <p style={{ color: "#666", fontSize: 11, marginBottom: 14 }}>전체 플레이어 현황 (사회자만 보임)</p>
@@ -737,7 +760,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
                     {p.name}
                   </span>
                   {!p.alive
-                    ? <span style={{ fontSize: 10, color: "#333" }}>💀</span>
+                    ? <span style={{ fontSize: 10, color: "#333" }}>👻</span>
                     : <span style={{ fontSize: 11, color: ri?.color, background: ri?.bg, border: `1px solid ${ri?.border}`, borderRadius: 10, padding: "2px 8px" }}>
                         {ri?.emoji} {ri?.name}
                       </span>
@@ -747,24 +770,28 @@ function HostGameScreen({ code, onEnd, onExit }) {
                 {/* 마피아 투표 현황 */}
                 {isNight && p.alive && isMafia(p.role) && (
                   <p style={{ fontSize: 11, color: "#e74c3c", marginTop: 4 }}>
-                    🔫 {p.mafiaVote ? `→ ${playersMap[p.mafiaVote]?.name}` : "미선택"}
+                    🧛 {p.mafiaVote ? `→ ${playersMap[p.mafiaVote]?.name}` : "미선택"}{fullMoon && p.mafiaVote2 ? `, ${playersMap[p.mafiaVote2]?.name}` : ""}
                   </p>
                 )}
                 {/* 특수역할 행동 (직업당 여러 명이어도 개인별로 표시) */}
                 {isNight && p.alive && p.role === "doctor" && (
-                  <p style={{ fontSize: 11, color: "#2ecc71", marginTop: 4 }}>⚕️ {nightActions.doctor?.[pid] ? `→ ${playersMap[nightActions.doctor[pid]]?.name}` : "미선택"}</p>
+                  <p style={{ fontSize: 11, color: "#2ecc71", marginTop: 4 }}>🧪 {nightActions.doctor?.[pid] ? `→ ${playersMap[nightActions.doctor[pid]]?.name}` : "미선택"}</p>
                 )}
                 {isNight && p.alive && p.role === "police" && (
-                  <p style={{ fontSize: 11, color: "#3498db", marginTop: 4 }}>🚔 {nightActions.police?.[pid] ? `→ ${playersMap[nightActions.police[pid]]?.name}` : "미선택"}</p>
+                  <>
+                    <p style={{ fontSize: 11, color: "#3498db", marginTop: 4 }}>🔦 {nightActions.police?.[pid] ? `→ ${playersMap[nightActions.police[pid]]?.name}` : "미선택"}</p>
+                    {nightActions.silver?.[pid] && <p style={{ fontSize: 11, color: "#bdc3c7", marginTop: 4 }}>🔫 은탄환 → {playersMap[nightActions.silver[pid]]?.name}</p>}
+                    {p.silverUsed && <p style={{ fontSize: 11, color: T.textMute, marginTop: 4 }}>🔫 은탄환 사용 완료</p>}
+                  </>
                 )}
                 {isNight && p.alive && p.role === "reporter" && (
-                  <p style={{ fontSize: 11, color: "#f1c40f", marginTop: 4 }}>📰 {nightActions.reporter?.[pid] ? `→ ${playersMap[nightActions.reporter[pid]]?.name}` : p.reporterUsed ? "사용 완료" : "미선택"}</p>
+                  <p style={{ fontSize: 11, color: "#f1c40f", marginTop: 4 }}>🔮 {nightActions.reporter?.[pid] ? `→ ${playersMap[nightActions.reporter[pid]]?.name}` : p.reporterUsed ? "사용 완료" : "미선택"}</p>
                 )}
                 {isNight && p.alive && p.role === "priest" && (
                   <p style={{ fontSize: 11, color: "#ecf0f1", marginTop: 4 }}>✝️ {nightActions.priest?.[pid] ? `→ ${playersMap[nightActions.priest[pid]]?.name}` : p.priestUsed ? "사용 완료" : "미선택"}</p>
                 )}
                 {isNight && p.alive && p.role === "framer" && (
-                  <p style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>🎭 {nightActions.framer?.[pid] ? `→ ${playersMap[nightActions.framer[pid]]?.name}` : "미선택"}</p>
+                  <p style={{ fontSize: 11, color: "#c0392b", marginTop: 4 }}>🪆 {nightActions.framer?.[pid] ? `→ ${playersMap[nightActions.framer[pid]]?.name}` : "미선택"}</p>
                 )}
                 {p.alive && p.role === "terrorist" && (
                   <p style={{ fontSize: 11, color: "#e67e22", marginTop: 4 }}>🧨 {p.terroristTarget ? `→ ${playersMap[p.terroristTarget]?.name}` : "미선택"}</p>
@@ -777,10 +804,14 @@ function HostGameScreen({ code, onEnd, onExit }) {
                   </p>
                 )}
 
+                {isNight && !p.alive && (
+                  <p style={{ fontSize: 11, color: "#b8a9d9", marginTop: 4 }}>👻 {nightActions.ghost?.[pid] ? `→ ${playersMap[nightActions.ghost[pid]]?.name}` : "미선택"}</p>
+                )}
+
                 {/* 사회자 수동 조작 */}
                 {p.alive
                   ? <button type="button" onClick={() => killPlayer(pid)} style={{ marginTop: 8, width: "100%", padding: "5px", background: "#1a0000", color: "#e74c3c", border: "1px solid #3a0000", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
-                      💀 사망 처리
+                      👻 사망 처리
                     </button>
                   : <button type="button" onClick={() => revivePlayer(pid)} style={{ marginTop: 8, width: "100%", padding: "5px", background: "#001a00", color: "#2ecc71", border: "1px solid #1a5c2a", borderRadius: 8, fontSize: 11, cursor: "pointer", fontFamily: "'Noto Sans KR', sans-serif" }}>
                       ✨ 부활 처리
@@ -798,9 +829,9 @@ function HostGameScreen({ code, onEnd, onExit }) {
           <Label color={T.blue}>밤 행동 요약</Label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 8 }}>
             <div style={{ flex: 1, minWidth: 120 }}>
-              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🔫 마피아 타겟</p>
+              <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🧛 뱀파이어 타겟</p>
               <p style={{ fontSize: 14, fontWeight: 700 }}>
-                {topMafiaTarget ? playersMap[topMafiaTarget]?.name + " (최다득표)" : "투표 중..."}
+                {mafiaTargets.length ? mafiaTargets.map(id => playersMap[id]?.name).join(", ") + " (최다득표)" : "투표 중..."}
               </p>
               <p style={{ fontSize: 10, color: T.textMute, marginTop: 2 }}>
                 {aliveMafiaEntries.filter(([, p]) => p.mafiaVote).length}/{aliveMafiaEntries.length}명 투표
@@ -818,31 +849,31 @@ function HostGameScreen({ code, onEnd, onExit }) {
                 <>
                   {doctors.length > 0 && (
                     <div style={{ flex: 1, minWidth: 120 }}>
-                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>⚕️ 의사</p>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🧪 연금술사</p>
                       <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.doctor, doctors)}/{doctors.length}명 선택 완료</p>
                     </div>
                   )}
                   {polices.length > 0 && (
                     <div style={{ flex: 1, minWidth: 120 }}>
-                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🚔 경찰</p>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🔦 유령 사냥꾼</p>
                       <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.police, polices)}/{polices.length}명 선택 완료</p>
                     </div>
                   )}
                   {reporters.length > 0 && (
                     <div style={{ flex: 1, minWidth: 120 }}>
-                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>📰 기자</p>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🔮 점술가</p>
                       <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.reporter, reporters)}/{reporters.length}명 선택 완료</p>
                     </div>
                   )}
                   {priests.length > 0 && (
                     <div style={{ flex: 1, minWidth: 120 }}>
-                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>✝️ 성직자</p>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>✝️ 퇴마사</p>
                       <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.priest, priests)}/{priests.length}명 선택 완료</p>
                     </div>
                   )}
                   {framers.length > 0 && (
                     <div style={{ flex: 1, minWidth: 120 }}>
-                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🎭 모함가</p>
+                      <p style={{ color: T.textMute, fontSize: 10, marginBottom: 4, letterSpacing: 1 }}>🪆 저주 인형사</p>
                       <p style={{ fontSize: 14, fontWeight: 700 }}>{doneCount(nightActions.framer, framers)}/{framers.length}명 선택 완료</p>
                     </div>
                   )}
@@ -861,8 +892,8 @@ function HostGameScreen({ code, onEnd, onExit }) {
             대상: <strong style={{ color: T.red }}>{playersMap[confirmTarget]?.name}</strong>
           </p>
           <div style={{ display: "flex", gap: 20 }}>
-            <p style={{ color: T.green, fontSize: 14 }}>✅ 찬성 {Object.values(room.confirmVotes || {}).filter(v => v === "yes").length}표</p>
-            <p style={{ color: T.red, fontSize: 14 }}>❌ 반대 {Object.values(room.confirmVotes || {}).filter(v => v === "no").length}표</p>
+            <p style={{ color: T.green, fontSize: 14 }}>✅ 찬성 {countConfirm(room.confirmVotes, voteCtx).yes}표</p>
+            <p style={{ color: T.red, fontSize: 14 }}>❌ 반대 {countConfirm(room.confirmVotes, voteCtx).no}표</p>
             <p style={{ color: T.textMute, fontSize: 14 }}>미투표 {Object.values(playersMap).filter(p => p.alive).length - Object.keys(room.confirmVotes || {}).length}명</p>
           </div>
         </div>
@@ -871,7 +902,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
       {/* 변호사 이의 */}
       {phase === "vote" && room.lawyerBlock && (
         <div style={{ background: T.surface, border: `1px solid ${T.purple}44`, borderLeft: `3px solid ${T.purple}`, borderRadius: 10, padding: "12px 16px", marginBottom: 12, maxWidth: "100%", boxSizing: "border-box" }}>
-          <p style={{ color: T.purple, fontWeight: 700, fontSize: 13 }}>⚖️ 변호사가 이의를 제기했습니다! 처형이 취소됩니다.</p>
+          <p style={{ color: T.purple, fontWeight: 700, fontSize: 13 }}>⚖️ 수호 마녀가 이의를 제기했습니다! 처형이 취소됩니다.</p>
         </div>
       )}
 
@@ -974,13 +1005,24 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
   const myPoliceResult = room.policeResults?.[playerId];
   const showPoliceResult = phase === "day" && myPoliceResult?.round === round - 1;
 
+  // 할로윈 규칙
+  const fullMoon = isFullMoon(round);
+  const voteCtx = { round, spooked: room.spooked, trickOrTreat: room.trickOrTreat };
+  const myVoteWeight = voteWeight(playerId, voteCtx);
+  const canVoteToday = amAlive && myVoteWeight > 0;
+  const myMafiaVote2 = playersMap[playerId]?.mafiaVote2 || null;
+  const isMyMafiaPick = (id) => id === myMafiaVote || (fullMoon && myMafiaVote2 === id);
+  const silverUsed = !!playersMap[playerId]?.silverUsed;
+  const mySilverTarget = nightActions.silver?.[playerId] || null;
+  const myGhostTarget = nightActions.ghost?.[playerId] || null;
+
   const submitConfirmVote = async (v) => {
-    if (!amAlive || myConfirmVote) return;
+    if (!canVoteToday || myConfirmVote) return;
     await update(ref(db, `rooms/${code}/confirmVotes`), { [playerId]: v });
   };
 
   const submitVote = async (targetId) => {
-    if (!amAlive) return;
+    if (!canVoteToday) return;
     // 같은 사람 누르면 취소
     if (voteTarget === targetId) {
       await set(ref(db, `rooms/${code}/votes/${playerId}`), null);
@@ -1017,11 +1059,17 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
   };
 
   // 마피아 타겟 선택 (같은 사람 누르면 취소)
+  // 보름달 밤엔 두 명까지 선택 (둘 다 고른 상태면 두 번째 선택을 교체)
   const selectMafiaTarget = async (targetId) => {
+    const meRef = ref(db, `rooms/${code}/players/${playerId}`);
     if (myMafiaVote === targetId) {
-      await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaVote: null });
+      await update(meRef, fullMoon ? { mafiaVote: myMafiaVote2, mafiaVote2: null } : { mafiaVote: null });
+    } else if (fullMoon && myMafiaVote2 === targetId) {
+      await update(meRef, { mafiaVote2: null });
+    } else if (fullMoon && myMafiaVote) {
+      await update(meRef, { mafiaVote2: targetId });
     } else {
-      await update(ref(db, `rooms/${code}/players/${playerId}`), { mafiaVote: targetId });
+      await update(meRef, { mafiaVote: targetId });
     }
   };
 
@@ -1054,6 +1102,19 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
     }
   };
 
+  // 🔫 은탄환 (게임 중 1회, 한 번 장전하면 변경 불가)
+  const submitSilver = async (targetId) => {
+    if (!amAlive || silverUsed || mySilverTarget) return;
+    if (!window.confirm(`${playersMap[targetId]?.name}에게 은탄환을 쏠까요?\n사람이라면 당신이 죽습니다.`)) return;
+    await update(ref(db, `rooms/${code}/nightActions/silver`), { [playerId]: targetId });
+  };
+
+  // 👻 유령의 속삭임 (죽은 사람만, 같은 사람 누르면 취소)
+  const selectGhostTarget = async (targetId) => {
+    if (amAlive) return;
+    await update(ref(db, `rooms/${code}/nightActions/ghost`), { [playerId]: myGhostTarget === targetId ? null : targetId });
+  };
+
   const lastDeath = room.lastDeath;
   const lastExecution = room.lastExecution;
 
@@ -1069,9 +1130,9 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
           animation: "fadeInOut 3s ease",
           fontFamily: "'Noto Sans KR', sans-serif",
         }}>
-          <div style={{ fontSize: 56, marginBottom: 24 }}>🌙</div>
-          <h2 style={{ color: "#3a5a8a", fontSize: 28, fontWeight: 900, marginBottom: 12, letterSpacing: 3 }}>밤이 되었습니다</h2>
-          <p style={{ color: "#4a4a6a", fontSize: 15, letterSpacing: 2 }}>모두 자리에 엎드려주세요</p>
+          <div style={{ fontSize: 56, marginBottom: 24 }}>{fullMoon ? "🌕" : "🦇"}</div>
+          <h2 style={{ color: fullMoon ? "#f5d76e" : "#7a5aa8", fontSize: 28, fontWeight: 900, marginBottom: 12, letterSpacing: 3 }}>{fullMoon ? "보름달이 떠올랐습니다" : "저주받은 밤이 찾아왔습니다"}</h2>
+          <p style={{ color: "#5a4a6a", fontSize: 15, letterSpacing: 2 }}>{fullMoon ? "오늘 밤 뱀파이어는 두 명을 노립니다..." : "모두 자리에 엎드려주세요"}</p>
         </div>
       )}
 
@@ -1100,7 +1161,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
               color: ri.team === "mafia" ? T.red : ri.team === "jester" ? "#e84393" : T.green,
               paddingRight: 8, borderRight: `1px solid ${T.border}`,
             }}>
-              {ri.team === "mafia" ? "마피아팀" : ri.team === "jester" ? "광대(솔로)" : "시민팀"}
+              {ri.team === "mafia" ? "뱀파이어팀" : ri.team === "jester" ? "잭오랜턴(솔로)" : "마을팀"}
             </span>
           )}
           {ri?.image && <img src={ri.image} alt={ri.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: `1px solid ${ri.border}` }} />}
@@ -1148,20 +1209,29 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       )}
 
       {/* 공지들 */}
-      {phase === "day" && lastDeath?.round === round - 1 && (
-        <Card style={{ border: `1px solid ${lastDeath.playerId ? "#3a0000" : "#003a00"}`, background: lastDeath.playerId ? "#0d0000" : "#000d00" }}>
-          {lastDeath.playerId
-            ? <><p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🌙 어젯밤 희생자</p>
-                <p style={{ fontSize: 16 }}><strong>{lastDeath.playerName}</strong>님이 사망했습니다</p>
-                <p style={{ color: "#555", fontSize: 12, marginTop: 4 }}>공개된 직업: {revealRole(lastDeath.role)}</p></>
-            : <p style={{ color: "#2ecc71", fontWeight: 700 }}>🌙 어젯밤 아무도 사망하지 않았습니다!</p>
-          }
-        </Card>
-      )}
+      {phase === "day" && lastDeath?.round === round - 1 && (() => {
+        const deaths = lastDeath.deaths || (lastDeath.playerId ? [lastDeath] : []);
+        return (
+          <Card style={{ border: `1px solid ${deaths.length ? "#3a0000" : "#003a00"}`, background: deaths.length ? "#0d0000" : "#000d00" }}>
+            {deaths.length
+              ? <><p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🌙 어젯밤 희생자</p>
+                  {deaths.map(d => (
+                    <div key={d.playerId} style={{ marginBottom: 8 }}>
+                      <p style={{ fontSize: 16 }}><strong>{d.playerName}</strong>님이 {d.cause === "silver" ? "은탄환에 쓰러졌습니다" : d.cause === "misfire" ? "은탄환을 잘못 쏘고 저주받았습니다" : "사망했습니다"}</p>
+                      <p style={{ color: "#555", fontSize: 12, marginTop: 4 }}>공개된 직업: {revealRole(d.role)}</p>
+                    </div>
+                  ))}</>
+              : <p style={{ color: "#2ecc71", fontWeight: 700 }}>🌙 어젯밤 아무도 사망하지 않았습니다!</p>
+            }
+          </Card>
+        );
+      })()}
+
+      <DayEffects room={room} round={round} phase={phase} />
 
       {phase === "day" && Object.entries(room.reporterReveals || {}).filter(([, r]) => r.round === round - 1).map(([rid, r]) => (
         <Card key={rid} style={{ border: "1px solid #5c4a00", background: "#1a1400" }}>
-          <p style={{ color: "#f1c40f", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>📰 기자 속보!</p>
+          <p style={{ color: "#f1c40f", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🔮 점술가의 예언!</p>
           <p style={{ fontSize: 15 }}><strong>{r.targetName}</strong>님의 직업은{" "}
             <span style={{ color: r.isMafiaTeam ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{r.result}</span>입니다!</p>
         </Card>
@@ -1170,7 +1240,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {isNight && lastExecution?.round === round - 1 && (
         <Card style={{ border: "1px solid #3a0000", background: "#0d0000" }}>
           {lastExecution.blocked
-            ? <p style={{ color: "#9b59b6", fontWeight: 700 }}>⚖️ 변호사의 이의로 처형이 취소됐습니다!</p>
+            ? <p style={{ color: "#9b59b6", fontWeight: 700 }}>⚖️ 수호 마녀의 이의로 처형이 취소됐습니다!</p>
             : lastExecution.playerId
               ? <><p style={{ color: "#e74c3c", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>⚖️ 처형 결과</p>
                   <p style={{ fontSize: 16 }}><strong>{lastExecution.playerName}</strong>님이 처형됐습니다</p>
@@ -1182,9 +1252,9 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
 
       {myRole === "police" && showPoliceResult && (
         <Card style={{ border: "1px solid #1a3a5c", background: "#00091a" }}>
-          <p style={{ color: "#3498db", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🚔 어젯밤 조사 결과 (나만 보여요)</p>
+          <p style={{ color: "#3498db", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🔦 어젯밤 조사 결과 (나만 보여요)</p>
           <p style={{ fontSize: 15 }}><strong>{myPoliceResult.targetName}</strong>님은{" "}
-            <span style={{ color: myPoliceResult.result === "마피아" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{myPoliceResult.result}</span>입니다!</p>
+            <span style={{ color: myPoliceResult.result === "뱀파이어" ? "#e74c3c" : "#2ecc71", fontWeight: 900, fontSize: 17 }}>{myPoliceResult.result}</span>입니다!</p>
         </Card>
       )}
 
@@ -1206,19 +1276,21 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
             {/* 투표 현황 */}
             <div style={{ display: "flex", justifyContent: "center", gap: 20, margin: "16px 0" }}>
               <div>
-                <p style={{ color: T.green, fontSize: 22, fontWeight: 900 }}>{Object.values(confirmVotes).filter(v => v === "yes").length}</p>
+                <p style={{ color: T.green, fontSize: 22, fontWeight: 900 }}>{countConfirm(confirmVotes, voteCtx).yes}</p>
                 <p style={{ color: T.textMute, fontSize: 11 }}>찬성</p>
               </div>
               <div style={{ width: 1, background: T.border }} />
               <div>
-                <p style={{ color: T.red, fontSize: 22, fontWeight: 900 }}>{Object.values(confirmVotes).filter(v => v === "no").length}</p>
+                <p style={{ color: T.red, fontSize: 22, fontWeight: 900 }}>{countConfirm(confirmVotes, voteCtx).no}</p>
                 <p style={{ color: T.textMute, fontSize: 11 }}>반대</p>
               </div>
             </div>
 
-            {!amAlive && <p style={{ color: T.textMute, fontSize: 13 }}>💀 사망 상태라 투표할 수 없습니다</p>}
+            {!amAlive && <p style={{ color: T.textMute, fontSize: 13 }}>👻 사망 상태라 투표할 수 없습니다</p>}
 
-            {amAlive && !myConfirmVote && (
+            {amAlive && !canVoteToday && <p style={{ color: T.textMute, fontSize: 13 }}>🕸️ 오늘은 투표할 수 없습니다</p>}
+
+            {canVoteToday && !myConfirmVote && (
               <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                 <Btn onClick={() => submitConfirmVote("yes")} color={T.green} style={{ marginBottom: 0 }}>✅ 찬성</Btn>
                 <Btn onClick={() => submitConfirmVote("no")} color={T.red} style={{ marginBottom: 0 }}>❌ 반대</Btn>
@@ -1236,7 +1308,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
 
       {myRole === "lawyer" && phase === "vote" && amAlive && !room.lawyerUsed && (
         <Card style={{ border: "1px solid #3a1a5c", background: "#0d0018" }}>
-          <p style={{ color: "#9b59b6", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚖️ 변호사 능력 (1회)</p>
+          <p style={{ color: "#9b59b6", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚖️ 수호 마녀 능력 (1회)</p>
           <Btn onClick={useLawyer} color="#9b59b6" disabled={lawyerUsed} style={{ marginBottom: 0 }}>
             {lawyerUsed ? "✅ 이의 제기 완료" : "⚖️ 이의 있습니다!"}
           </Btn>
@@ -1246,7 +1318,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {/* 마피아 팀 패널 */}
       {amMafia && isNight && amAlive && (
         <Card style={{ border: `1px solid ${T.red}44`, background: T.surface }}>
-          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 12 }}>🔫 마피아 팀 (나만 보여요)</p>
+          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 12 }}>🧛 뱀파이어 팀 (나만 보여요)</p>
 
           {mafiaTeam.length > 0 && (
             <div style={{ marginBottom: 14 }}>
@@ -1255,30 +1327,30 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
                 {mafiaTeam.map(([id, p]) => (
                   <span key={id} style={{ background: T.surface2, border: `1px solid ${T.red}44`, borderRadius: 20, padding: "4px 12px", fontSize: 12, color: T.red }}>
                     {ROLES_INFO[p.role]?.emoji} {p.name}
-                    {p.mafiaVote ? ` → ${playersMap[p.mafiaVote]?.name}` : " (미선택)"}
+                    {p.mafiaVote ? ` → ${playersMap[p.mafiaVote]?.name}` : " (미선택)"}{fullMoon && p.mafiaVote2 ? `, ${playersMap[p.mafiaVote2]?.name}` : ""}
                   </span>
                 ))}
               </div>
             </div>
           )}
 
-          <Label>제거할 대상 선택</Label>
+          <Label color={fullMoon ? "#f5d76e" : undefined}>{fullMoon ? "🌕 보름달! 습격할 대상 두 명 선택" : "습격할 대상 선택"}</Label>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
             {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
               <div key={id} onClick={() => selectMafiaTarget(id)} style={{
                 padding: "11px 14px", borderRadius: 8, cursor: "pointer",
-                background: myMafiaVote === id ? `${T.red}22` : T.surface2,
-                border: `1px solid ${myMafiaVote === id ? T.red : T.border2}`,
+                background: isMyMafiaPick(id) ? `${T.red}22` : T.surface2,
+                border: `1px solid ${isMyMafiaPick(id) ? T.red : T.border2}`,
                 display: "flex", alignItems: "center", transition: "all 0.15s",
               }}>
                 <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
-                {myMafiaVote === id && <span style={{ color: T.red, fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
+                {isMyMafiaPick(id) && <span style={{ color: T.red, fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
               </div>
             ))}
           </div>
           {myMafiaVote && (
             <p style={{ color: T.green, fontSize: 12, marginTop: 10, textAlign: "center" }}>
-              ✓ {playersMap[myMafiaVote]?.name} 선택 완료
+              ✓ {[myMafiaVote, fullMoon && myMafiaVote2].filter(Boolean).map(id => playersMap[id]?.name).join(", ")} 선택 완료
             </p>
           )}
         </Card>
@@ -1287,8 +1359,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {/* 모함가 능력 패널 */}
       {myRole === "framer" && isNight && amAlive && (
         <Card style={{ border: `1px solid ${T.red}44`, background: T.surface }}>
-          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🎭 모함가 능력 (나만 보여요)</p>
-          <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>선택한 대상이 경찰에게 조사당하면 결과가 "마피아"로 조작됩니다.</p>
+          <p style={{ color: T.red, fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🪆 저주 인형사 능력 (나만 보여요)</p>
+          <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>선택한 대상이 유령 사냥꾼에게 조사당하면 결과가 "뱀파이어"로 조작됩니다.</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {alivePlayers.filter(([id]) => !isMafia(playersMap[id]?.role)).map(([id, p]) => (
               <div key={id} onClick={() => selectFramerTarget(id)} style={{
@@ -1308,7 +1380,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {/* 성직자 능력 패널 */}
       {myRole === "priest" && isNight && amAlive && !priestAlreadyUsed && (
         <Card style={{ border: "1px solid #4a4a4a", background: T.surface }}>
-          <p style={{ color: "#ecf0f1", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>✝️ 성직자 능력 (1회) — 부활시킬 사람 선택</p>
+          <p style={{ color: "#ecf0f1", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>✝️ 퇴마사 능력 (1회) — 부활시킬 사람 선택</p>
           {deadPlayers.length === 0
             ? <p style={{ color: T.textMute, fontSize: 12 }}>아직 사망자가 없습니다...</p>
             : (
@@ -1332,7 +1404,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {/* 테러리스트 능력 패널 */}
       {myRole === "terrorist" && amAlive && (
         <Card style={{ border: "1px solid #5c3300", background: T.surface }}>
-          <p style={{ color: "#e67e22", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🧨 테러리스트 능력 (나만 보여요)</p>
+          <p style={{ color: "#e67e22", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🧨 폭탄 허수아비 능력 (나만 보여요)</p>
           <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>처형당하면 아래 선택한 대상이 함께 죽습니다. 언제든 바꿀 수 있어요.</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {alivePlayers.filter(([id]) => id !== playerId).map(([id, p]) => (
@@ -1344,6 +1416,48 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
               }}>
                 <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
                 {myTerroristTarget === id && <span style={{ color: "#e67e22", fontSize: 11, fontWeight: 700 }}>✓ 선택</span>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* 은탄환 패널 (유령 사냥꾼, 게임 중 1회) */}
+      {myRole === "police" && isNight && amAlive && !silverUsed && (
+        <Card style={{ border: "1px solid #4a5a6a", background: T.surface }}>
+          <p style={{ color: "#bdc3c7", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>🔫 은탄환 (1회, 나만 보여요)</p>
+          <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>뱀파이어를 쏘면 그 자가 죽지만, 사람을 쏘면 당신이 죽습니다. 쓰지 않아도 됩니다.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {alivePlayers.filter(([id]) => id !== playerId).map(([id, p]) => (
+              <div key={id} onClick={() => submitSilver(id)} style={{
+                padding: "11px 14px", borderRadius: 8, cursor: mySilverTarget ? "default" : "pointer",
+                background: mySilverTarget === id ? "#bdc3c722" : T.surface2,
+                border: `1px solid ${mySilverTarget === id ? "#bdc3c7" : T.border2}`,
+                display: "flex", alignItems: "center", transition: "all 0.15s",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
+                {mySilverTarget === id && <span style={{ color: "#bdc3c7", fontSize: 11, fontWeight: 700 }}>✓ 장전 완료</span>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* 유령 패널 (죽은 사람) */}
+      {!amAlive && isNight && (
+        <Card style={{ border: "1px solid #3a2f4a", background: T.surface }}>
+          <p style={{ color: "#b8a9d9", fontSize: 12, fontWeight: 700, marginBottom: 6 }}>👻 유령의 속삭임</p>
+          <p style={{ color: T.textMute, fontSize: 11, marginBottom: 10 }}>산 사람 한 명을 골라 오싹하게 만드세요. 유령들에게 가장 많이 지목된 사람은 내일 투표할 수 없습니다.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {alivePlayers.map(([id, p]) => (
+              <div key={id} onClick={() => selectGhostTarget(id)} style={{
+                padding: "11px 14px", borderRadius: 8, cursor: "pointer",
+                background: myGhostTarget === id ? "#b8a9d922" : T.surface2,
+                border: `1px solid ${myGhostTarget === id ? "#b8a9d9" : T.border2}`,
+                display: "flex", alignItems: "center", transition: "all 0.15s",
+              }}>
+                <span style={{ flex: 1, fontSize: 13, color: T.text }}>{p.name}</span>
+                {myGhostTarget === id && <span style={{ color: "#b8a9d9", fontSize: 11, fontWeight: 700 }}>✓ 속삭임</span>}
               </div>
             ))}
           </div>
@@ -1365,7 +1479,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
             // 의사는 자기 자신도 보호 가능, 나머지는 본인 선택 불가
             const canSelfTarget = myRole === "doctor";
             const canClick = (!isMe || canSelfTarget) && amAlive && (
-              (phase === "vote" && !isMe) ||
+              (phase === "vote" && !isMe && canVoteToday) ||
               (isNight && needsNightAction && !amMafia)
             );
             return (
@@ -1398,24 +1512,26 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
       {/* 안내 */}
       <Card style={{ borderLeft: `3px solid ${isNight ? "#3498db" : phase === "vote" ? "#e74c3c" : "#f1c40f"}`, background: "#0d0d0d" }}>
         {phase === "day" && <p style={{ color: "#888", fontSize: 13 }}>☀️ 자유롭게 토론하세요. 사회자가 투표를 시작하면 참여하세요.</p>}
-        {isNight && !amAlive && <p style={{ color: "#444", fontSize: 13 }}>💀 사망 상태입니다. 조용히 지켜보세요.</p>}
-        {isNight && amAlive && myRole === "framer" && <p style={{ color: T.red, fontSize: 13 }}>🎭 위 모함가 패널에서 누명 씌울 대상을 선택하세요. (마피아 킬 투표도 함께 참여하세요)</p>}
-        {isNight && amAlive && amMafia && myRole !== "framer" && <p style={{ color: "#e74c3c", fontSize: 13 }}>🔫 위 마피아 패널에서 대상을 선택하고 동의하세요.</p>}
-        {isNight && amAlive && myRole === "priest" && !priestAlreadyUsed && <p style={{ color: "#ecf0f1", fontSize: 13 }}>✝️ 위 성직자 패널에서 부활시킬 사람을 선택하세요.</p>}
+        {isNight && !amAlive && <p style={{ color: "#b8a9d9", fontSize: 13 }}>👻 유령이 되었습니다. 위 패널에서 속삭일 사람을 고르세요.</p>}
+        {isNight && amAlive && myRole === "framer" && <p style={{ color: T.red, fontSize: 13 }}>🪆 위 저주 인형사 패널에서 누명 씌울 대상을 선택하세요. (뱀파이어 킬 투표도 함께 참여하세요)</p>}
+        {isNight && amAlive && amMafia && myRole !== "framer" && <p style={{ color: "#e74c3c", fontSize: 13 }}>🧛 위 뱀파이어 패널에서 대상을 선택하고 동의하세요.</p>}
+        {isNight && amAlive && myRole === "priest" && !priestAlreadyUsed && <p style={{ color: "#ecf0f1", fontSize: 13 }}>✝️ 위 퇴마사 패널에서 부활시킬 사람을 선택하세요.</p>}
         {isNight && amAlive && myRole === "priest" && priestAlreadyUsed && <p style={{ color: "#666", fontSize: 13 }}>✝️ 이미 능력을 사용했습니다.</p>}
-        {amAlive && myRole === "terrorist" && <p style={{ color: "#e67e22", fontSize: 13 }}>🧨 위 테러리스트 패널에서 폭탄 대상을 선택해두세요. 처형당하면 함께 죽습니다.</p>}
+        {amAlive && myRole === "terrorist" && <p style={{ color: "#e67e22", fontSize: 13 }}>🧨 위 폭탄 허수아비 패널에서 폭탄 대상을 선택해두세요. 처형당하면 함께 죽습니다.</p>}
         {isNight && amAlive && !amMafia && !needsNightAction && !["priest", "terrorist"].includes(myRole) && <p style={{ color: "#666", fontSize: 13 }}>👤 눈을 감고 기다리세요...</p>}
-        {isNight && amAlive && myRole === "reporter" && reporterAlreadyUsed && <p style={{ color: "#5c4a00", fontSize: 13 }}>📰 이미 능력을 사용했습니다.</p>}
+        {isNight && amAlive && myRole === "reporter" && reporterAlreadyUsed && <p style={{ color: "#5c4a00", fontSize: 13 }}>🔮 이미 능력을 사용했습니다.</p>}
         {isNight && amAlive && needsNightAction && !myNightPick && (
           <p style={{ color: "#3498db", fontSize: 13 }}>
-            {myRole === "doctor" && "⚕️ 보호할 사람을 선택하세요."}
-            {myRole === "police" && "🚔 조사할 사람을 선택하세요."}
-            {myRole === "reporter" && "📰 공개할 사람을 선택하세요."}
+            {myRole === "doctor" && "🧪 보호할 사람을 선택하세요."}
+            {myRole === "police" && "🔦 조사할 사람을 선택하세요."}
+            {myRole === "reporter" && "🔮 공개할 사람을 선택하세요."}
           </p>
         )}
         {isNight && amAlive && needsNightAction && myNightPick && <p style={{ color: "#2ecc71", fontSize: 13 }}>✅ 행동 완료! 사회자가 넘길 때까지 기다리세요.</p>}
-        {phase === "vote" && !amAlive && <p style={{ color: "#444", fontSize: 13 }}>💀 사망 상태라 투표할 수 없습니다.</p>}
-        {phase === "vote" && amAlive && !voteSubmitted && <p style={{ color: "#e74c3c", fontSize: 13 }}>🗳️ 처형할 사람을 선택하세요!</p>}
+        {phase === "vote" && !amAlive && <p style={{ color: "#444", fontSize: 13 }}>👻 사망 상태라 투표할 수 없습니다.</p>}
+        {phase === "vote" && amAlive && !canVoteToday && <p style={{ color: T.textMute, fontSize: 13 }}>🕸️ 오늘은 투표할 수 없습니다.</p>}
+        {phase === "vote" && canVoteToday && myVoteWeight === 2 && <p style={{ color: T.redGlow, fontSize: 13 }}>🍬 사탕 효과! 오늘 당신의 표는 2표입니다.</p>}
+        {phase === "vote" && canVoteToday && !voteSubmitted && <p style={{ color: "#e74c3c", fontSize: 13 }}>🗳️ 처형할 사람을 선택하세요!</p>}
         {phase === "vote" && amAlive && voteSubmitted && <p style={{ color: "#2ecc71", fontSize: 13 }}>✅ 투표 완료! ({playersMap[voteTarget]?.name}에게 투표)</p>}
       </Card>
     </PageWrap>
@@ -1454,10 +1570,10 @@ function WinScreen({ winner, myRole, isHost, onRestart, code }) {
         <div style={{ height: 1, width: 50, background: `linear-gradient(to left, transparent, ${winColor}66)` }} />
       </div>
 
-      <div style={{ fontSize: 64, marginBottom: 24 }}>{isJesterWin ? "🤡" : isMafiaWin ? "🔫" : "⚖️"}</div>
+      <div style={{ fontSize: 64, marginBottom: 24 }}>{isJesterWin ? "🎃" : isMafiaWin ? "🧛" : "⚖️"}</div>
 
       <h1 style={{ fontSize: 44, fontWeight: 900, color: winColor, marginBottom: 8, letterSpacing: 2, textShadow: `0 0 40px ${winColor}66` }}>
-        {isJesterWin ? "광대 승리" : isMafiaWin ? "마피아 승리" : "시민 승리"}
+        {isJesterWin ? "잭오랜턴 승리" : isMafiaWin ? "뱀파이어 승리" : "마을 승리"}
       </h1>
 
       <p style={{ fontSize: 16, color: isHost ? T.textMute : iWon ? T.gold : T.textMute, marginBottom: 52, letterSpacing: 1 }}>
@@ -1577,7 +1693,7 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet" />
       <style>{`
         * { box-sizing: border-box; }
-        body { margin: 0; background: #08080a; }
+        body { margin: 0; background: #0a0710; }
         input::placeholder { color: #3a3a4a; }
         input { outline: none; }
         details > summary { list-style: none; }
