@@ -60,7 +60,7 @@ const Btn = ({ children, onClick, color, disabled, style = {}, outline = false }
 const Card = ({ children, style = {}, accent }) => (
   <div style={{
     background: T.surface, borderRadius: 12, padding: "16px 18px", marginBottom: 12,
-    width: "100%", maxWidth: 460, boxSizing: "border-box",
+    width: "100%", maxWidth: "100%", boxSizing: "border-box",
     border: accent ? `1px solid ${accent}` : `1px solid ${T.border}`,
     borderLeft: accent ? `3px solid ${accent}` : `1px solid ${T.border}`,
     ...style,
@@ -77,7 +77,8 @@ const Label = ({ children, color }) => (
 
 const Divider = () => <div style={{ height: 1, background: T.border, margin: "12px 0" }} />;
 
-const PageWrap = ({ children, night = false, wide = false }) => (
+// xwide: 아이패드 가로 등 넓은 화면용 게임 화면
+const PageWrap = ({ children, night = false, wide = false, xwide = false }) => (
   <div style={{
     minHeight: "100vh",
     background: night
@@ -87,7 +88,7 @@ const PageWrap = ({ children, night = false, wide = false }) => (
     display: "flex", flexDirection: "column", alignItems: "center",
     padding: "24px 16px 48px", transition: "background 1.2s ease",
   }}>
-    <div style={{ width: "100%", maxWidth: wide ? 680 : 440 }}>{children}</div>
+    <div style={{ width: "100%", maxWidth: xwide ? 1180 : wide ? 680 : 440 }}>{children}</div>
   </div>
 );
 
@@ -843,7 +844,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
   };
 
   return (
-    <PageWrap night={isNight} wide>
+    <PageWrap night={isNight} xwide>
       <ExitGameButton onExit={onExit} isHost />
       {/* 헤더 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
@@ -1269,7 +1270,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
   const lastExecution = room.lastExecution;
 
   return (
-    <PageWrap night={isNight}>
+    <PageWrap night={isNight} xwide>
 
       {/* 밤 전환 오버레이 */}
       {showNightOverlay && (
@@ -1319,6 +1320,9 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
         </div>
       </div>
 
+      {/* 넓은 화면에선 2단: 왼쪽 = 기록/공지, 오른쪽 = 내 행동/생존자/안내 */}
+      <div className="game-cols">
+      <div>
       {/* 직전 로그 크게 표시 */}
       {(() => {
         const logs = room.logs || {};
@@ -1326,7 +1330,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
         const lastLog = logEntries2[0]?.[1] || null;
         if (!lastLog) return null;
         return (
-          <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 10, padding: "16px 18px", marginBottom: 16, width: "100%", maxWidth: 440, boxSizing: "border-box" }}>
+          <div style={{ background: T.surface, border: `1px solid ${T.border2}`, borderRadius: 10, padding: "16px 18px", marginBottom: 16, width: "100%", boxSizing: "border-box" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <div style={{ height: 1, flex: 1, background: T.border }} />
               <span style={{ color: T.textMute, fontSize: 10, letterSpacing: 3, fontWeight: 700 }}>{lastLog.phase} 기록</span>
@@ -1341,7 +1345,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
 
       {/* 전체 로그 */}
       {Object.keys(room.logs || {}).length > 1 && (
-        <details style={{ marginBottom: 14, width: "100%", maxWidth: 440 }}>
+        <details style={{ marginBottom: 14, width: "100%" }}>
           <summary style={{ color: T.textMute, fontSize: 11, cursor: "pointer", padding: "10px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, letterSpacing: 2 }}>
             📜 전체 활동 로그
           </summary>
@@ -1456,6 +1460,22 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
         </div>
       )}
 
+      {/* 사망자 */}
+      {deadPlayers.length > 0 && (
+        <Card style={{ background: "#0d0d0d" }}>
+          <p style={{ color: "#444", fontSize: 12, marginBottom: 10 }}>사망자</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {deadPlayers.map(([id, p]) => (
+              <span key={id} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#3a3a3a", textDecoration: "line-through" }}>
+                {p.name} ({revealRole(p.role)})
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
+      </div>
+
+      <div>
       {myRole === "lawyer" && phase === "vote" && amAlive && !room.lawyerUsed && (
         <Card style={{ border: "1px solid #3a1a5c", background: "#0d0018" }}>
           <p style={{ color: "#9b59b6", fontSize: 12, fontWeight: 700, marginBottom: 8 }}>⚖️ 수호 마녀 능력 (1회)</p>
@@ -1645,19 +1665,6 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
         </div>
       </Card>
 
-      {/* 사망자 */}
-      {deadPlayers.length > 0 && (
-        <Card style={{ background: "#0d0d0d" }}>
-          <p style={{ color: "#444", fontSize: 12, marginBottom: 10 }}>사망자</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {deadPlayers.map(([id, p]) => (
-              <span key={id} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#3a3a3a", textDecoration: "line-through" }}>
-                {p.name} ({revealRole(p.role)})
-              </span>
-            ))}
-          </div>
-        </Card>
-      )}
 
       {/* 안내 */}
       <Card style={{ borderLeft: `3px solid ${isNight ? "#3498db" : phase === "vote" ? "#e74c3c" : "#f1c40f"}`, background: "#0d0d0d" }}>
@@ -1684,6 +1691,8 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
         {phase === "vote" && canVoteToday && !voteSubmitted && <p style={{ color: "#e74c3c", fontSize: 13 }}>🗳️ 처형할 사람을 선택하세요!</p>}
         {phase === "vote" && amAlive && voteSubmitted && <p style={{ color: "#2ecc71", fontSize: 13 }}>✅ 투표 완료! ({playersMap[voteTarget]?.name}에게 투표)</p>}
       </Card>
+      </div>
+      </div>
     </PageWrap>
   );
 }
@@ -1849,6 +1858,10 @@ export default function App() {
         details > summary { list-style: none; }
         details > summary::-webkit-details-marker { display: none; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .game-cols { display: flex; flex-direction: column; }
+        @media (min-width: 900px) {
+          .game-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; align-items: start; }
+        }
         @keyframes fadeInOut { 0% { opacity: 0; } 15% { opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
       `}</style>
       {screen === "title" && (
