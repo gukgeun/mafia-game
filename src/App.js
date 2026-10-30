@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, set, onValue, update } from "firebase/database";
-import { ROLES_INFO, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm, recommendedRoles, isFullMoon, voteWeight, tallyVotes, countConfirm, pickMafiaTargets, rollTrickOrTreat } from "./gameLogic";
+import { ROLES_INFO, roleLabel, isMafia, revealRole, generateCode, shuffleRoles, checkWin, resolveNight, resolveConfirm, recommendedRoles, isFullMoon, voteWeight, tallyVotes, countConfirm, pickMafiaTargets, rollTrickOrTreat } from "./gameLogic";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvV_N8Ndp5jZFG56XNlxpypOktRBIZpOc",
@@ -250,7 +250,7 @@ function HowToPlay({ onClose }) {
                           ? <img src={ri.image} alt={ri.name} style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", border: `2px solid ${ri.border}`, flexShrink: 0 }} />
                           : <span style={{ fontSize: 32, width: 52, textAlign: "center", flexShrink: 0 }}>{ri.emoji}</span>}
                         <div style={{ flex: 1 }}>
-                          <p style={{ color: ri.color, fontSize: 14, fontWeight: 700, margin: "2px 0 4px" }}>{ri.emoji} {ri.name}</p>
+                          <p style={{ color: ri.color, fontSize: 14, fontWeight: 700, margin: "2px 0 4px" }}>{ri.emoji} {roleLabel(id)}</p>
                           <p style={{ color: T.textDim, fontSize: 12, lineHeight: 1.6, margin: 0 }}>{ri.desc}</p>
                         </div>
                       </div>
@@ -428,7 +428,7 @@ function HostScreen({ onCreated, onBack }) {
     ["mafia", T.red], ["mafiaBoss", T.red], ["police", T.blue], ["doctor", T.green],
     ["reporter", "#b48ade"], ["lawyer", T.purple], ["terrorist", "#e67e22"], ["priest", "#ecf0f1"],
     ["jester", "#e84393"], ["framer", T.red], ["bomber", T.red],
-  ].map(([id, color]) => ({ id, label: ROLES_INFO[id].name, emoji: ROLES_INFO[id].emoji, color }));
+  ].map(([id, color]) => ({ id, label: roleLabel(id), emoji: ROLES_INFO[id].emoji, color }));
 
   return (
     <PageWrap>
@@ -675,6 +675,7 @@ function RoleRevealScreen({ code, playerId, onReady }) {
             }}>{ri.emoji}</div>
           )}
           <h3 style={{ color: ri.color, fontSize: 22, fontWeight: 900, margin: "16px 0 8px", textShadow: `0 0 20px ${ri.color}` }}>{ri.name}</h3>
+          <p style={{ color: T.textDim, fontSize: 13, margin: "-4px 0 8px" }}>(원래 직업: {ri.orig})</p>
           <p style={{ color: T.textDim, fontSize: 12, textAlign: "center", lineHeight: 1.7, maxWidth: 260 }}>{ri.desc}</p>
           <div style={{ marginTop: 12, padding: "3px 14px", borderRadius: 20, background: ri.team === "mafia" ? "#2a000066" : ri.team === "jester" ? "#2a001a66" : "#00200066", border: `1px solid ${ri.team === "mafia" ? T.red + "44" : ri.team === "jester" ? "#e8439344" : T.green + "44"}` }}>
             <span style={{ fontSize: 10, color: ri.team === "mafia" ? T.red : ri.team === "jester" ? "#e84393" : T.green, letterSpacing: 2, fontWeight: 700 }}>
@@ -922,7 +923,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
                   {!p.alive
                     ? <span style={{ fontSize: 10, color: "#333" }}>👻</span>
                     : <span style={{ fontSize: 11, color: ri?.color, background: ri?.bg, border: `1px solid ${ri?.border}`, borderRadius: 10, padding: "2px 8px" }}>
-                        {ri?.emoji} {ri?.name}
+                        {ri?.emoji} {roleLabel(p.role)}
                       </span>
                   }
                 </div>
@@ -1088,7 +1089,7 @@ function HostGameScreen({ code, onEnd, onExit }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
             {deadPlayers.map(([id, p]) => (
               <span key={id} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 20, padding: "3px 10px", fontSize: 11, color: T.textMute }}>
-                {p.name} · {p.role ? ROLES_INFO[p.role]?.emoji + " " + ROLES_INFO[p.role]?.name : "?"}
+                {p.name} · {p.role ? ROLES_INFO[p.role]?.emoji + " " + roleLabel(p.role) : "?"}
               </span>
             ))}
           </div>
@@ -1330,7 +1331,7 @@ function PlayerGameScreen({ code, playerId, myRole, onWin, onExit }) {
             </span>
           )}
           {ri?.image && <img src={ri.image} alt={ri.name} style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: `1px solid ${ri.border}` }} />}
-          <p style={{ fontSize: 11, color: ri?.color, fontWeight: 700, letterSpacing: 1 }}>{ri?.name}</p>
+          <p style={{ fontSize: 11, color: ri?.color, fontWeight: 700, letterSpacing: 1 }}>{roleLabel(myRole)}</p>
         </div>
       </div>
 
